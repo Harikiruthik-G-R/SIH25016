@@ -49,6 +49,24 @@ dependencies {
   implementation("com.google.firebase:firebase-analytics")
 
 }
+
 flutter {
     source = "../.."
+}
+
+// Task to copy APK to Flutter's expected location
+afterEvaluate {
+    tasks.register<Copy>("copyApkToFlutterLocation") {
+        dependsOn("assembleDebug")
+        from("${buildDir}/outputs/apk/debug/")
+        into("${project.rootDir}/../../build/app/outputs/flutter-apk/")
+        include("*.apk")
+        doFirst {
+            file("${project.rootDir}/../../build/app/outputs/flutter-apk/").mkdirs()
+        }
+    }
+
+    tasks.named("assembleDebug") {
+        finalizedBy("copyApkToFlutterLocation")
+    }
 }
