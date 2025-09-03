@@ -1,0 +1,51 @@
+name: GeoAt
+description: "A new Flutter project."
+
+publish_to: 'none' 
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.7.2
+
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+  firebase_core: ^4.0.0
+  cloud_firestore: ^6.0.1
+  shared_preferences: ^2.5.3
+  firebase_storage: ^13.0.1
+  cached_network_image: ^3.4.1
+  image_picker: ^1.2.0
+  local_auth: ^2.3.0
+  crypto: ^3.0.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_launcher_icons: ^0.13.1
+  flutter_lints: ^5.0.0
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/Splash3.png"
+flutter_launcher_name:
+  name: "GeoAt"
+
+flutter:
+  assets:
+    - assets/logo.png
+    - assets/onboarding_image.png
+    - assets/geoat_earth.png
+    - assets/Splash.png
+    - assets/Splash2.png
+    - assets/Splash3.png
+    - assets/Splash3.jpg
+    - assets/profile.jpeg
+    - assets/employee.png
+
+  uses-material-design: true  

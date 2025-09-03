@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "894800243617",
+    "project_id": "geoat-7",
+    "storage_bucket": "geoat-7.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:894800243617:android:fb06368151cd1d60b9f9e0",
+        "android_client_info": {
+          "package_name": "com.geoat.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAGHu0ZjZUJTi4lkKIj_U4li9T9czRylWQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
