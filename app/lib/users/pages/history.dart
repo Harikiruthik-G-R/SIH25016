@@ -393,7 +393,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               ],
             ),
           );
-        }).toList(),
+        }),
 
         const SizedBox(height: 20),
       ],
@@ -483,7 +483,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               ],
             ),
           );
-        }).toList(),
+        }),
 
         const SizedBox(height: 20),
       ],

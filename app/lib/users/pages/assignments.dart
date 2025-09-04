@@ -432,7 +432,7 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
               ],
             ),
           );
-        }).toList(),
+        }),
         
         const SizedBox(height: 20),
       ],
@@ -572,7 +572,7 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
               ],
             ),
           );
-        }).toList(),
+        }),
         
         const SizedBox(height: 20),
       ],

@@ -46,8 +46,8 @@ class _UserHomeScreenState extends State<UserHomeScreen>
   String currentTime = '';
   String currentDate = '';
   Timer? _timer;
-  PageController _pageController = PageController();
-  int _currentPage = 0;
+  final PageController _pageController = PageController();
+  final int _currentPage = 0;
   
   @override
   void initState() {

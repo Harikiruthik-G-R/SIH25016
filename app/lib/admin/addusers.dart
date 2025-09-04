@@ -478,13 +478,24 @@ class _AddUsersScreenState extends State<AddUsersScreen> {
   }
 
   void _showBulkUploadDialog() {
+    // Ensure we have valid group data
+    final String groupId = widget.groupData['id'] ?? 'demo_group';
+    final Map<String, dynamic> groupData =
+        widget.groupData.isEmpty
+            ? {'id': 'demo_group', 'name': 'Demo Classroom'}
+            : widget.groupData;
+
     showDialog(
       context: context,
-      builder:
-          (context) => BulkUploadDialog(
-            groupId: widget.groupData['id'],
-            groupData: widget.groupData,
-          ),
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        // Force new instance creation
+        return BulkUploadDialog(
+          key: ValueKey('bulk_upload_${DateTime.now().millisecondsSinceEpoch}'),
+          groupId: groupId,
+          groupData: groupData,
+        );
+      },
     );
   }
 
@@ -702,8 +713,9 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
                     icon: Icons.email,
                     validator: (value) {
                       if (value?.isEmpty ?? true) return 'Please enter email';
-                      if (!value!.contains('@'))
+                      if (!value!.contains('@')) {
                         return 'Please enter valid email';
+                      }
                       return null;
                     },
                   ),
@@ -1230,8 +1242,9 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
                     icon: Icons.email,
                     validator: (value) {
                       if (value?.isEmpty ?? true) return 'Please enter email';
-                      if (!value!.contains('@'))
+                      if (!value!.contains('@')) {
                         return 'Please enter valid email';
+                      }
                       return null;
                     },
                   ),
@@ -1597,7 +1610,7 @@ class _BulkUploadDialogState extends State<BulkUploadDialog>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Bulk Student Upload',
+                    'Bulk Student Upload (Enhanced)',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 24,
