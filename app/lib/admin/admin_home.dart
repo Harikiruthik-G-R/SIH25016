@@ -11,6 +11,7 @@ import 'addusers.dart';
 import 'coordinates.dart';
 import 'search_screen.dart';
 import 'active_users.dart';
+import 'timetable_screen.dart';
 
 class AdminHomeScreen extends StatefulWidget {
   final String userName;
@@ -131,6 +132,8 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
         return ActiveUsersScreen();
       case 'Statistics':
         return StatisticsScreen();
+      case 'Timetable':
+        return TimetableScreen();
       default:
         return _buildDashboardContent();
     }
@@ -283,6 +286,12 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
                                           _setCurrentSection('Set Coordinates'),
                                 ),
                                 _buildMenuItem(
+                                  icon: Icons.schedule_outlined,
+                                  title: 'Timetable',
+                                  isSelected: _currentSection == 'Timetable',
+                                  onTap: () => _setCurrentSection('Timetable'),
+                                ),
+                                _buildMenuItem(
                                   icon: Icons.search_outlined,
                                   title: 'Search',
                                   isSelected: _currentSection == 'Search',
@@ -409,6 +418,12 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
                         title: 'Set Coordinates',
                         isSelected: _currentSection == 'Set Coordinates',
                         onTap: () => _setCurrentSection('Set Coordinates'),
+                      ),
+                      _buildMenuItem(
+                        icon: Icons.schedule_outlined,
+                        title: 'Timetable',
+                        isSelected: _currentSection == 'Timetable',
+                        onTap: () => _setCurrentSection('Timetable'),
                       ),
                       _buildMenuItem(
                         icon: Icons.search_outlined,
