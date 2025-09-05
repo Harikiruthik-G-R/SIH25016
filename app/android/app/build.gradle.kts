@@ -54,19 +54,73 @@ flutter {
     source = "../.."
 }
 
+// Ensure Flutter output directory exists
+tasks.register("createFlutterApkDir") {
+    doLast {
+        val flutterApkDir = file("${rootProject.projectDir}/../build/app/outputs/flutter-apk/")
+        flutterApkDir.mkdirs()
+        println("Created directory: ${flutterApkDir.absolutePath}")
+    }
+}
+
 // Task to copy APK to Flutter's expected location
 afterEvaluate {
-    tasks.register<Copy>("copyApkToFlutterLocation") {
+    // Make sure the directory is created before any build
+    tasks.named("preBuild") {
+        dependsOn("createFlutterApkDir")
+    }
+
+    // Fixed task to copy debug APK with correct naming
+    tasks.register<Copy>("copyDebugApkToFlutterLocation") {
         dependsOn("assembleDebug")
+        val flutterApkDir = file("${rootProject.projectDir}/../build/app/outputs/flutter-apk/")
         from("${buildDir}/outputs/apk/debug/")
-        into("${project.rootDir}/../../build/app/outputs/flutter-apk/")
+        into(flutterApkDir)
         include("*.apk")
+        rename { filename ->
+            if (filename.endsWith("-debug.apk")) {
+                "app-debug.apk"
+            } else {
+                filename
+            }
+        }
         doFirst {
-            file("${project.rootDir}/../../build/app/outputs/flutter-apk/").mkdirs()
+            flutterApkDir.mkdirs()
+            println("Copying debug APK to: ${flutterApkDir.absolutePath}")
+        }
+        doLast {
+            println("Debug APK copied to Flutter expected location: ${flutterApkDir.absolutePath}")
+        }
+    }
+
+    // Fixed task to copy release APK with correct naming
+    tasks.register<Copy>("copyReleaseApkToFlutterLocation") {
+        dependsOn("assembleRelease")
+        val flutterApkDir = file("${rootProject.projectDir}/../build/app/outputs/flutter-apk/")
+        from("${buildDir}/outputs/apk/release/")
+        into(flutterApkDir)
+        include("*.apk")
+        rename { filename ->
+            if (filename.endsWith("-release.apk")) {
+                "app-release.apk"
+            } else {
+                filename
+            }
+        }
+        doFirst {
+            flutterApkDir.mkdirs()
+            println("Copying release APK to: ${flutterApkDir.absolutePath}")
+        }
+        doLast {
+            println("Release APK copied to Flutter expected location: ${flutterApkDir.absolutePath}")
         }
     }
 
     tasks.named("assembleDebug") {
-        finalizedBy("copyApkToFlutterLocation")
+        finalizedBy("copyDebugApkToFlutterLocation")
+    }
+    
+    tasks.named("assembleRelease") {
+        finalizedBy("copyReleaseApkToFlutterLocation")
     }
 }
