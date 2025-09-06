@@ -3,8 +3,16 @@ import 'package:GeoAt/sessionmanager.dart';
 import 'package:GeoAt/users/users_home.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'dart:io';
+import 'dart:ui';
+
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:flutter_background_service_android/flutter_background_service_android.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,7 +27,367 @@ void main() async {
     return;
   }
   
+  // Initialize background service after a delay to ensure everything is ready
+  try {
+    await initializeService();
+    debugPrint('Background service initialized successfully');
+  } catch (e) {
+    debugPrint('Background service initialization failed: $e');
+    // Continue without background service - don't crash the app
+  }
+  
   runApp(const MyApp());
+}
+
+Future<void> initializeService() async {
+  final service = FlutterBackgroundService();
+
+  // Create notification channel first
+  const AndroidNotificationChannel channel = AndroidNotificationChannel(
+    'attendance_foreground',
+    'Attendance Service',
+    description: 'This channel is used for attendance tracking notifications.',
+    importance: Importance.low,
+  );
+
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+      FlutterLocalNotificationsPlugin();
+
+  if (Platform.isAndroid) {
+    await flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(channel);
+  }
+
+  await service.configure(
+    androidConfiguration: AndroidConfiguration(
+      onStart: onStart,
+      autoStart: false, // Changed to false to prevent auto-start issues
+      isForegroundMode: true,
+      notificationChannelId: 'attendance_foreground',
+      initialNotificationTitle: 'Attendance Service',
+      initialNotificationContent: 'Ready to track attendance...',
+      foregroundServiceNotificationId: 888,
+    ),
+    iosConfiguration: IosConfiguration(
+      autoStart: false, // Changed to false
+      onForeground: onStart,
+      onBackground: onIosBackground,
+    ),
+  );
+
+  // Don't auto-start the service - start it only when needed
+}
+
+// Helper function to start the service when needed
+Future<void> startBackgroundService() async {
+  try {
+    final service = FlutterBackgroundService();
+    final isRunning = await service.isRunning();
+    
+    if (!isRunning) {
+      await service.startService();
+      debugPrint('Background service started');
+    }
+  } catch (e) {
+    debugPrint('Error starting background service: $e');
+  }
+}
+
+// Helper function to stop the service
+Future<void> stopBackgroundService() async {
+  try {
+    final service = FlutterBackgroundService();
+    final isRunning = await service.isRunning();
+    
+    if (isRunning) {
+      service.invoke('stopService');
+      debugPrint('Background service stopped');
+    }
+  } catch (e) {
+    debugPrint('Error stopping background service: $e');
+  }
+}
+
+@pragma('vm:entry-point')
+Future<bool> onIosBackground(ServiceInstance service) async {
+  WidgetsFlutterBinding.ensureInitialized();
+  DartPluginRegistrant.ensureInitialized();
+
+  try {
+    SharedPreferences preferences = await SharedPreferences.getInstance();
+    await preferences.reload();
+    final log = preferences.getStringList('log') ?? <String>[];
+    log.add(DateTime.now().toIso8601String());
+    await preferences.setStringList('log', log);
+  } catch (e) {
+    debugPrint('iOS background service error: $e');
+  }
+
+  return true;
+}
+
+@pragma('vm:entry-point')
+void onStart(ServiceInstance service) async {
+  try {
+    DartPluginRegistrant.ensureInitialized();
+
+    // Initialize Firebase in isolate with error handling
+    try {
+      await Firebase.initializeApp();
+    } catch (e) {
+      debugPrint('Firebase initialization failed in background service: $e');
+      return; // Exit if Firebase can't be initialized
+    }
+
+    // Initialize SharedPreferences with error handling
+    SharedPreferences? preferences;
+    try {
+      preferences = await SharedPreferences.getInstance();
+      await preferences.setString("service_status", "running");
+    } catch (e) {
+      debugPrint('SharedPreferences initialization failed: $e');
+    }
+
+    final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+        FlutterLocalNotificationsPlugin();
+
+    if (service is AndroidServiceInstance) {
+      service.on('setAsForeground').listen((event) {
+        service.setAsForegroundService();
+      });
+
+      service.on('setAsBackground').listen((event) {
+        service.setAsBackgroundService();
+      });
+    }
+
+    service.on('stopService').listen((event) {
+      service.stopSelf();
+    });
+
+    // Reduce frequency to avoid overwhelming the system
+    Timer.periodic(const Duration(minutes: 2), (timer) async {
+      try {
+        if (service is AndroidServiceInstance) {
+          if (await service.isForegroundService()) {
+            // Update notification
+            flutterLocalNotificationsPlugin.show(
+              888,
+              'Attendance Active',
+              'Last checked: ${DateTime.now().toString().substring(11, 16)}',
+              const NotificationDetails(
+                android: AndroidNotificationDetails(
+                  'attendance_foreground',
+                  'Attendance Service',
+                  icon: 'ic_bg_service_small',
+                  ongoing: true,
+                  importance: Importance.low,
+                  priority: Priority.low,
+                ),
+              ),
+            );
+
+            // Update attendance status
+            await _updateAttendanceStatus();
+          }
+        }
+
+        // Log service activity
+        debugPrint('Background service tick: ${DateTime.now()}');
+
+        if (preferences != null) {
+          try {
+            await preferences.reload();
+            final log = preferences.getStringList('log') ?? <String>[];
+            log.add(DateTime.now().toIso8601String());
+            
+            // Keep only last 50 entries to prevent memory issues
+            if (log.length > 50) {
+              log.removeRange(0, log.length - 50);
+            }
+            
+            await preferences.setStringList('log', log);
+          } catch (e) {
+            debugPrint('Error updating preferences: $e');
+          }
+        }
+
+        service.invoke('update', {
+          "current_date": DateTime.now().toIso8601String(),
+          "device": Platform.operatingSystem,
+        });
+      } catch (e) {
+        debugPrint('Error in background service timer: $e');
+      }
+    });
+  } catch (e) {
+    debugPrint('Critical error in background service onStart: $e');
+  }
+}
+
+Future<void> _updateAttendanceStatus() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final keys = prefs.getKeys();
+    
+    // Find active sessions for all users
+    for (final key in keys) {
+      if (key.startsWith('active_session_')) {
+        final rollNumber = key.split('active_session_')[1];
+        final sessionId = prefs.getString(key);
+        final checkInTimeStr = prefs.getString('checkin_time_$rollNumber');
+        
+        if (sessionId != null && checkInTimeStr != null) {
+          await _validateAndUpdateSession(rollNumber, sessionId, checkInTimeStr);
+        }
+      }
+    }
+  } catch (e) {
+    debugPrint('Background attendance update error: $e');
+  }
+}
+
+Future<void> _validateAndUpdateSession(String rollNumber, String sessionId, String checkInTimeStr) async {
+  try {
+    final db = FirebaseFirestore.instance;
+    
+    // Add timeout and error handling for Firestore operations
+    final sessionDoc = await db
+        .collection('student_checkins')
+        .doc(rollNumber)
+        .collection('sessions')
+        .doc(sessionId)
+        .get()
+        .timeout(const Duration(seconds: 15));
+        
+    if (!sessionDoc.exists || sessionDoc.data()?['status'] != 'ongoing') {
+      // Session is invalid, clear it
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('active_session_$rollNumber');
+      await prefs.remove('checkin_time_$rollNumber');
+      debugPrint('Cleared invalid session for $rollNumber');
+      return;
+    }
+
+    // Get current location with better error handling
+    bool locationPermissionGranted = false;
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
+      locationPermissionGranted = permission == LocationPermission.always || 
+                                 permission == LocationPermission.whileInUse;
+    } catch (e) {
+      debugPrint('Location permission check failed: $e');
+    }
+
+    Map<String, dynamic> updateData = {
+      'lastLocationUpdate': Timestamp.now(),
+    };
+
+    if (locationPermissionGranted) {
+      try {
+        final position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.medium,
+        ).timeout(const Duration(seconds: 15));
+        
+        updateData.addAll({
+          'lastKnownLat': position.latitude,
+          'lastKnownLng': position.longitude,
+        });
+        
+        updateData['logs'] = FieldValue.arrayUnion([
+          'background_location_update at ${DateTime.now().toIso8601String()}'
+        ]);
+        
+        debugPrint('Updated session $sessionId for $rollNumber with location');
+      } catch (e) {
+        debugPrint('Location update failed for session $sessionId: $e');
+        
+        updateData['logs'] = FieldValue.arrayUnion([
+          'background_ping at ${DateTime.now().toIso8601String()} (no location)'
+        ]);
+      }
+    } else {
+      updateData['logs'] = FieldValue.arrayUnion([
+        'background_ping at ${DateTime.now().toIso8601String()} (no permission)'
+      ]);
+    }
+
+    // Update session with timeout
+    await db
+        .collection('student_checkins')
+        .doc(rollNumber)
+        .collection('sessions')
+        .doc(sessionId)
+        .update(updateData)
+        .timeout(const Duration(seconds: 15));
+
+    // Check if session should be auto-ended
+    final sessionData = sessionDoc.data()!;
+    final expectedEndAt = (sessionData['expectedEndAt'] as Timestamp?)?.toDate();
+    
+    if (expectedEndAt != null && DateTime.now().isAfter(expectedEndAt)) {
+      await _autoEndSession(db, rollNumber, sessionId, sessionData);
+    }
+
+  } catch (e) {
+    debugPrint('Session validation error for $rollNumber: $e');
+  }
+}
+
+Future<void> _autoEndSession(
+  FirebaseFirestore db, 
+  String rollNumber, 
+  String sessionId, 
+  Map<String, dynamic> sessionData
+) async {
+  try {
+    final now = DateTime.now();
+    final checkInAt = (sessionData['checkInAt'] as Timestamp).toDate();
+    final durationMinutes = now.difference(checkInAt).inSeconds / 60.0;
+
+    await db
+        .collection('student_checkins')
+        .doc(rollNumber)
+        .collection('sessions')
+        .doc(sessionId)
+        .update({
+      'checkOutAt': Timestamp.fromDate(now),
+      'status': 'completed',
+      'durationMinutes': durationMinutes,
+      'closeReason': 'background_auto_end',
+      'logs': FieldValue.arrayUnion([
+        'background_auto_end at ${now.toIso8601String()}'
+      ]),
+    }).timeout(const Duration(seconds: 15));
+
+    // Clear from local storage
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('active_session_$rollNumber');
+    await prefs.remove('checkin_time_$rollNumber');
+
+    debugPrint('Auto-ended session $sessionId for $rollNumber');
+
+    // Send notification about auto-end
+    final FlutterLocalNotificationsPlugin notifications = FlutterLocalNotificationsPlugin();
+    await notifications.show(
+      999,
+      'Session Ended',
+      'Attendance session completed automatically.',
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'attendance_foreground',
+          'Attendance Service',
+          importance: Importance.high,
+          priority: Priority.high,
+        ),
+      ),
+    );
+
+  } catch (e) {
+    debugPrint('Auto-end session error: $e');
+  }
 }
 
 // Error app when Firebase fails
@@ -153,27 +521,19 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void initState() {
     super.initState();
-    
+
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 1200),
       vsync: this,
     );
 
-    _fadeAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeInOut,
-    ));
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
+    );
 
-    _scaleAnimation = Tween<double>(
-      begin: 0.8,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.elasticOut,
-    ));
+    _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.elasticOut),
+    );
 
     _startApp();
   }
@@ -182,16 +542,15 @@ class _SplashScreenState extends State<SplashScreen>
     try {
       // Start animation
       _animationController.forward();
-      
+
       // Wait for minimum splash time
       await Future.delayed(const Duration(milliseconds: 1500));
-      
+
       // Verify Firebase connection
       await _verifyFirebaseConnection();
-      
+
       // Check session and navigate
       await _checkSessionAndNavigate();
-      
     } catch (e) {
       debugPrint('Error in _startApp: $e');
       if (mounted) {
@@ -213,13 +572,13 @@ class _SplashScreenState extends State<SplashScreen>
     }
   }
 
- Future<void> _checkSessionAndNavigate() async {
+  Future<void> _checkSessionAndNavigate() async {
     if (!mounted) return;
-    
+
     try {
       // First check if session is valid using the SessionManager validation
       final isSessionValid = await SessionManager.validateSession();
-      
+
       if (!isSessionValid) {
         // No valid session, go to onboarding
         Navigator.of(context).pushReplacementNamed('/onboarding');
@@ -228,22 +587,23 @@ class _SplashScreenState extends State<SplashScreen>
 
       // Get session data
       final session = await SessionManager.getSession();
-      
+
       if (!mounted) return;
-      
+
       // Double-check essential data exists
-      if (session['isLoggedIn'] == true && 
+      if (session['isLoggedIn'] == true &&
           session['userName']?.isNotEmpty == true &&
           session['userEmail']?.isNotEmpty == true) {
-        
         // Optional: Verify session with Firebase (but don't clear session on failure)
         try {
           await _verifyUserSession(session);
         } catch (e) {
-          debugPrint('Firebase verification failed, but continuing with cached session: $e');
+          debugPrint(
+            'Firebase verification failed, but continuing with cached session: $e',
+          );
           // Don't clear session or throw error - continue with cached data
         }
-        
+
         // User has valid session - navigate to appropriate home screen
         Navigator.of(context).pushReplacementNamed(
           session['isAdmin'] == true ? '/admin' : '/students',
@@ -268,16 +628,17 @@ class _SplashScreenState extends State<SplashScreen>
       }
     }
   }
+
   Future<void> _verifyUserSession(Map<String, dynamic> session) async {
     final isAdmin = session['isAdmin'] ?? false;
     final userEmail = session['userEmail'] ?? '';
-    
+
     if (userEmail.isEmpty) {
       throw Exception('Invalid session - no email');
     }
 
     QuerySnapshot querySnapshot;
-    
+
     if (isAdmin) {
       querySnapshot = await FirebaseFirestore.instance
           .collection('admins')
@@ -303,21 +664,22 @@ class _SplashScreenState extends State<SplashScreen>
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('Connection Error'),
-        content: const Text(
-          'Unable to connect to the server. Please check your internet connection and try again.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _startApp(); // Retry
-            },
-            child: const Text('Retry'),
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Connection Error'),
+            content: const Text(
+              'Unable to connect to the server. Please check your internet connection and try again.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _startApp(); // Retry
+                },
+                child: const Text('Retry'),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 
@@ -335,10 +697,7 @@ class _SplashScreenState extends State<SplashScreen>
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              Colors.white,
-              Color(0xFFF0F8F0),
-            ],
+            colors: [Colors.white, Color(0xFFF0F8F0)],
           ),
         ),
         child: Center(
@@ -413,10 +772,7 @@ class _SplashScreenState extends State<SplashScreen>
                 opacity: _fadeAnimation,
                 child: Text(
                   'Connecting to server...',
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 16,
-                  ),
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
                 ),
               ),
             ],
@@ -488,17 +844,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final List<OnboardingData> onboardingData = [
     OnboardingData(
       title: 'Welcome to GeoAt!',
-      description: 'Track and manage attendance with real-time location verification and secure cloud storage.',
+      description:
+          'Track and manage attendance with real-time location verification and secure cloud storage.',
       icon: Icons.location_on,
     ),
     OnboardingData(
       title: 'Secure & Reliable',
-      description: 'Your data is safely stored in the cloud with real-time synchronization across all devices.',
+      description:
+          'Your data is safely stored in the cloud with real-time synchronization across all devices.',
       icon: Icons.cloud_done,
     ),
     OnboardingData(
       title: 'Location Verification',
-      description: 'We need to access your location to verify your attendance accurately.',
+      description:
+          'We need to access your location to verify your attendance accurately.',
       icon: Icons.my_location,
     ),
   ];
@@ -517,10 +876,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Colors.white,
-              Color(0xFFF0F8F0),
-            ],
+            colors: [Colors.white, Color(0xFFF0F8F0)],
           ),
         ),
         child: SafeArea(
@@ -532,9 +888,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 child: Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
-                    onPressed: () => Navigator.pushReplacementNamed(context, '/login'),
+                    onPressed:
+                        () => Navigator.pushReplacementNamed(context, '/login'),
                     style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 10,
+                      ),
                       backgroundColor: const Color(0xFF4CAF50),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(25),
@@ -550,7 +910,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                 ),
               ),
-              
+
               // Page View
               Expanded(
                 child: PageView.builder(
@@ -566,7 +926,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   },
                 ),
               ),
-              
+
               // Page Indicators
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -578,17 +938,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     height: 8,
                     width: currentPage == index ? 24 : 8,
                     decoration: BoxDecoration(
-                      color: currentPage == index 
-                          ? const Color(0xFF4CAF50) 
-                          : Colors.grey.shade300,
+                      color:
+                          currentPage == index
+                              ? const Color(0xFF4CAF50)
+                              : Colors.grey.shade300,
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
                 ),
               ),
-              
+
               const SizedBox(height: 30),
-              
+
               // Next/Get Started Button
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -627,7 +988,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       ),
                     ),
                     child: Text(
-                      currentPage < onboardingData.length - 1 ? 'Next' : 'Get Started',
+                      currentPage < onboardingData.length - 1
+                          ? 'Next'
+                          : 'Get Started',
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w600,
@@ -637,7 +1000,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                 ),
               ),
-              
+
               const SizedBox(height: 30),
             ],
           ),
@@ -678,11 +1041,7 @@ class OnboardingPage extends StatelessWidget {
               color: const Color(0xFF4CAF50).withOpacity(0.1),
               shape: BoxShape.circle,
             ),
-            child: Icon(
-              data.icon,
-              size: 80,
-              color: const Color(0xFF4CAF50),
-            ),
+            child: Icon(data.icon, size: 80, color: const Color(0xFF4CAF50)),
           ),
           const SizedBox(height: 40),
           Text(
@@ -748,25 +1107,36 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
 
   Future<void> loginUser() async {
     if (!_formKey.currentState!.validate()) return;
-    
+
     final loginValue = loginController.text.trim();
     final password = passwordController.text.trim();
+
+    debugPrint("🔑 Login attempt:");
+    debugPrint("➡️ loginValue: $loginValue");
+    debugPrint("➡️ password: $password");
 
     setState(() => isLoading = true);
 
     try {
+      // check if password is a phone number (all digits and length >= 10)
+      final isPhoneLike = RegExp(
+        r'^[0-9]{10,}$',
+      ).hasMatch(password); // FIXED REGEX
+      debugPrint("📱 Is password phone number? $isPhoneLike");
+
       if (selectedRole == 'Admin') {
         await _loginAdmin(loginValue, password);
       } else {
+        // just send password, no extra args
         await _loginStudent(loginValue, password);
       }
-      
     } on TimeoutException {
       _showError("Connection timeout. Please check your internet connection.");
     } catch (e) {
-      debugPrint("Login error: $e");
-      
-      if (e.toString().contains('network') || e.toString().contains('timeout')) {
+      debugPrint("❌ Login error: $e");
+
+      if (e.toString().contains('network') ||
+          e.toString().contains('timeout')) {
         _showError("Network error. Please check your internet connection.");
       } else if (e.toString().contains('Invalid credentials')) {
         _showError(e.toString().replaceAll('Exception: ', ''));
@@ -818,97 +1188,121 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     );
   }
 
- Future<void> _loginStudent(String loginValue, String password) async {
-  QuerySnapshot querySnapshot;
+  Future<void> _loginStudent(String loginValue, String password) async {
+    QuerySnapshot querySnapshot;
 
-  // Check if login is via email or roll number
-  bool isEmail = loginValue.contains('@');
+    // Detect login type: email, phone (10 digits), or roll number
+    bool isEmail = loginValue.contains('@');
+    bool isPhone = RegExp(r'^\d{10}$').hasMatch(loginValue);
 
-  try {
-    // Use collectionGroup to search across all "students" subcollections
-    if (isEmail) {
-      querySnapshot = await FirebaseFirestore.instance
-          .collectionGroup('students')
-          .where('email', isEqualTo: loginValue)
-          .limit(1)
-          .get()
-          .timeout(const Duration(seconds: 15));
-    } else {
-      querySnapshot = await FirebaseFirestore.instance
-          .collectionGroup('students')
-          .where('rollNumber', isEqualTo: loginValue)
-          .limit(1)
-          .get()
-          .timeout(const Duration(seconds: 15));
-    }
-
-    if (querySnapshot.docs.isEmpty) {
-      throw Exception("Invalid student credentials. Please check your ${isEmail ? 'email' : 'roll number'}.");
-    }
-
-    final data = querySnapshot.docs.first.data() as Map<String, dynamic>;
-    final storedPassword = (data['password'] ?? '').toString();
-
-    // Password check
-    if (storedPassword != password) {
-      throw Exception("Invalid credentials. Please check your password.");
-    }
-
-    // Fetch group info using groupId
-    String groupName = '';
-    if (data['groupId'] != null && data['groupId'].toString().isNotEmpty) {
-      try {
-        final groupDoc = await FirebaseFirestore.instance
-            .collection('groups')
-            .doc(data['groupId'])
+    try {
+      // Query Firestore based on login type
+      if (isEmail) {
+        querySnapshot = await FirebaseFirestore.instance
+            .collectionGroup('students')
+            .where('email', isEqualTo: loginValue.trim())
+            .limit(1)
             .get()
-            .timeout(const Duration(seconds: 10));
-        if (groupDoc.exists) {
-          final groupData = groupDoc.data() as Map<String, dynamic>;
-          groupName = groupData['name'] ?? '';
-        }
-      } catch (e) {
-        debugPrint('Error fetching group info: $e');
+            .timeout(const Duration(seconds: 15));
+      } else if (isPhone) {
+        querySnapshot = await FirebaseFirestore.instance
+            .collectionGroup('students')
+            .where('phone', isEqualTo: loginValue.trim())
+            .limit(1)
+            .get()
+            .timeout(const Duration(seconds: 15));
+      } else {
+        querySnapshot = await FirebaseFirestore.instance
+            .collectionGroup('students')
+            .where('rollNumber', isEqualTo: loginValue.trim())
+            .limit(1)
+            .get()
+            .timeout(const Duration(seconds: 15));
       }
+
+      if (querySnapshot.docs.isEmpty) {
+        throw Exception(
+          "Invalid student credentials. Please check your ${isEmail
+              ? 'email'
+              : isPhone
+              ? 'phone number'
+              : 'roll number'}.",
+        );
+      }
+
+      final data = querySnapshot.docs.first.data() as Map<String, dynamic>;
+      final storedPassword = (data['password'] ?? '').toString();
+
+      // 🔑 Unified password / phone validation
+      if (RegExp(r'^\d{10}$').hasMatch(password.trim())) {
+        // If password looks like a phone number → match with phone field
+        if (data['phone'].toString().trim() != password.trim()) {
+          throw Exception(
+            "Invalid credentials. Please check your phone number.",
+          );
+        }
+      } else {
+        // Normal password match
+        if (storedPassword.trim() != password.trim()) {
+          throw Exception("Invalid credentials. Please check your password.");
+        }
+      }
+
+      // Fetch group info
+      String groupName = '';
+      if (data['groupId'] != null && data['groupId'].toString().isNotEmpty) {
+        try {
+          final groupDoc = await FirebaseFirestore.instance
+              .collection('groups')
+              .doc(data['groupId'])
+              .get()
+              .timeout(const Duration(seconds: 10));
+          if (groupDoc.exists) {
+            final groupData = groupDoc.data() as Map<String, dynamic>;
+            groupName = groupData['name'] ?? '';
+          }
+        } catch (e) {
+          debugPrint('Error fetching group info: $e');
+        }
+      }
+
+      // Save session
+      await SessionManager.saveSession(
+        isLoggedIn: true,
+        isAdmin: false,
+        userName: (data['name'] ?? '').toString(),
+        userEmail: (data['email'] ?? '').toString(),
+        rollNumber: (data['rollNumber'] ?? '').toString(),
+        groupId: (data['groupId'] ?? '').toString(),
+        groupName: groupName,
+        department: (data['department'] ?? '').toString(),
+      );
+
+      if (!mounted) return;
+
+      // Navigate to TickScreen
+      Navigator.pushNamed(
+        context,
+        '/tickscreen',
+        arguments: {
+          'isAdmin': false,
+          'name': data['name'],
+          'email': data['email'],
+          'rollNumber': data['rollNumber'],
+          'groupId': data['groupId'],
+          'groupName': groupName,
+          'department': data['department'],
+        },
+      );
+    } catch (e) {
+      debugPrint("Login error: $e");
+      throw Exception("Login failed. Please try again.");
     }
-
-    // Save session
-    await SessionManager.saveSession(
-      isLoggedIn: true,
-      isAdmin: false,
-      userName: (data['name'] ?? '').toString(),
-      userEmail: (data['email'] ?? '').toString(),
-      rollNumber: (data['rollNumber'] ?? '').toString(),
-      groupId: (data['groupId'] ?? '').toString(),
-      groupName: groupName,
-      department: (data['department'] ?? '').toString(),
-    );
-
-    if (!mounted) return;
-
-    // Navigate to TickScreen
-    Navigator.pushNamed(
-      context,
-      '/tickscreen',
-      arguments: {
-        'isAdmin': false,
-        'name': data['name'],
-        'email': data['email'],
-        'rollNumber': data['rollNumber'],
-        'groupId': data['groupId'],
-        'groupName': groupName,
-        'department': data['department'],
-      },
-    );
-  } catch (e) {
-    debugPrint("Login error: $e");
-    throw Exception("Login failed. Please try again.");
   }
-}
 
   void _showError(String message) {
     if (!mounted) return;
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -929,17 +1323,17 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
 
   String? _validateLogin(String? value) {
     if (value == null || value.isEmpty) {
-      return selectedRole == 'Admin' 
-          ? 'Please enter your email' 
+      return selectedRole == 'Admin'
+          ? 'Please enter your email'
           : 'Please enter your roll number or email';
     }
-    
+
     if (selectedRole == 'Admin') {
       if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+        // FIXED REGEX
         return 'Please enter a valid email';
       }
     }
-    
     return null;
   }
 
@@ -1003,7 +1397,10 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
             ),
             filled: true,
             fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 16,
+            ),
           ),
         ),
       ],
@@ -1034,14 +1431,18 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
             decoration: InputDecoration(
               prefixIcon: const Icon(Icons.person, color: Color(0xFF4CAF50)),
               border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 16,
+              ),
             ),
-            items: roles.map((String role) {
-              return DropdownMenuItem<String>(
-                value: role,
-                child: Text(role),
-              );
-            }).toList(),
+            items:
+                roles.map((String role) {
+                  return DropdownMenuItem<String>(
+                    value: role,
+                    child: Text(role),
+                  );
+                }).toList(),
             onChanged: (String? newValue) {
               setState(() {
                 selectedRole = newValue!;
@@ -1063,10 +1464,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Colors.white,
-              Color(0xFFF0F8F0),
-            ],
+            colors: [Colors.white, Color(0xFFF0F8F0)],
           ),
         ),
         child: SafeArea(
@@ -1087,18 +1485,20 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                       padding: const EdgeInsets.all(12),
                     ),
                   ),
-                  
+
                   const SizedBox(height: 20),
-                  
+
                   // Welcome section
                   SlideTransition(
                     position: Tween<Offset>(
                       begin: const Offset(0, 0.3),
                       end: Offset.zero,
-                    ).animate(CurvedAnimation(
-                      parent: _animationController,
-                      curve: Curves.easeOut,
-                    )),
+                    ).animate(
+                      CurvedAnimation(
+                        parent: _animationController,
+                        curve: Curves.easeOut,
+                      ),
+                    ),
                     child: FadeTransition(
                       opacity: _animationController,
                       child: Column(
@@ -1124,63 +1524,75 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                       ),
                     ),
                   ),
-                  
+
                   const SizedBox(height: 40),
-                  
+
                   // Role selection
                   SlideTransition(
                     position: Tween<Offset>(
                       begin: const Offset(0, 0.3),
                       end: Offset.zero,
-                    ).animate(CurvedAnimation(
-                      parent: _animationController,
-                      curve: const Interval(0.1, 1.0, curve: Curves.easeOut),
-                    )),
+                    ).animate(
+                      CurvedAnimation(
+                        parent: _animationController,
+                        curve: const Interval(0.1, 1.0, curve: Curves.easeOut),
+                      ),
+                    ),
                     child: FadeTransition(
                       opacity: _animationController,
                       child: _buildRoleDropdown(),
                     ),
                   ),
-                  
+
                   const SizedBox(height: 20),
-                  
+
                   // Login field
                   SlideTransition(
                     position: Tween<Offset>(
                       begin: const Offset(0, 0.3),
                       end: Offset.zero,
-                    ).animate(CurvedAnimation(
-                      parent: _animationController,
-                      curve: const Interval(0.2, 1.0, curve: Curves.easeOut),
-                    )),
+                    ).animate(
+                      CurvedAnimation(
+                        parent: _animationController,
+                        curve: const Interval(0.2, 1.0, curve: Curves.easeOut),
+                      ),
+                    ),
                     child: FadeTransition(
                       opacity: _animationController,
                       child: _buildInputField(
                         controller: loginController,
-                        label: selectedRole == 'Admin' ? 'Email' : 'Roll Number / Email',
-                        icon: selectedRole == 'Admin' ? Icons.email : Icons.badge,
-                        keyboardType: selectedRole == 'Admin' 
-                            ? TextInputType.emailAddress 
-                            : TextInputType.text,
+                        label:
+                            selectedRole == 'Admin'
+                                ? 'Email'
+                                : 'Roll Number / Email',
+                        icon:
+                            selectedRole == 'Admin' ? Icons.email : Icons.badge,
+                        keyboardType:
+                            selectedRole == 'Admin'
+                                ? TextInputType.emailAddress
+                                : TextInputType.text,
                         validator: _validateLogin,
-                        hintText: selectedRole == 'Admin' 
-                            ? 'Enter your email address'
-                            : 'Enter roll number or email',
+                        hintText:
+                            selectedRole == 'Admin'
+                                ? 'Enter your email address'
+                                : 'Enter roll number or email',
                       ),
                     ),
                   ),
-                  
+
                   const SizedBox(height: 20),
-                  
+
                   // Password field
                   SlideTransition(
                     position: Tween<Offset>(
                       begin: const Offset(0, 0.3),
                       end: Offset.zero,
-                    ).animate(CurvedAnimation(
-                      parent: _animationController,
-                      curve: const Interval(0.3, 1.0, curve: Curves.easeOut),
-                    )),
+                    ).animate(
+                      CurvedAnimation(
+                        parent: _animationController,
+                        curve: const Interval(0.3, 1.0, curve: Curves.easeOut),
+                      ),
+                    ),
                     child: FadeTransition(
                       opacity: _animationController,
                       child: _buildInputField(
@@ -1191,7 +1603,9 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                         validator: _validatePassword,
                         suffixIcon: IconButton(
                           icon: Icon(
-                            obscurePassword ? Icons.visibility : Icons.visibility_off,
+                            obscurePassword
+                                ? Icons.visibility
+                                : Icons.visibility_off,
                             color: const Color(0xFF4CAF50),
                           ),
                           onPressed: () {
@@ -1203,18 +1617,20 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                       ),
                     ),
                   ),
-                  
+
                   const SizedBox(height: 40),
-                  
+
                   // Login button
                   SlideTransition(
                     position: Tween<Offset>(
                       begin: const Offset(0, 0.3),
                       end: Offset.zero,
-                    ).animate(CurvedAnimation(
-                      parent: _animationController,
-                      curve: const Interval(0.4, 1.0, curve: Curves.easeOut),
-                    )),
+                    ).animate(
+                      CurvedAnimation(
+                        parent: _animationController,
+                        curve: const Interval(0.4, 1.0, curve: Curves.easeOut),
+                      ),
+                    ),
                     child: FadeTransition(
                       opacity: _animationController,
                       child: Container(
@@ -1242,30 +1658,33 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                               borderRadius: BorderRadius.circular(16),
                             ),
                           ),
-                          child: isLoading
-                              ? const SizedBox(
-                                  height: 24,
-                                  width: 24,
-                                  child: CircularProgressIndicator(
-                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                    strokeWidth: 2,
+                          child:
+                              isLoading
+                                  ? const SizedBox(
+                                    height: 24,
+                                    width: 24,
+                                    child: CircularProgressIndicator(
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.white,
+                                      ),
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                  : const Text(
+                                    'Sign In',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                    ),
                                   ),
-                                )
-                              : const Text(
-                                  'Sign In',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white,
-                                  ),
-                                ),
                         ),
                       ),
                     ),
                   ),
-                  
+
                   const SizedBox(height: 20),
-                  
+
                   // Connection status indicator
                   Center(
                     child: Row(
@@ -1329,16 +1748,18 @@ class _TickAnimationState extends State<TickAnimation>
       vsync: this,
     );
 
-    _scaleAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.elasticOut),
-    );
+    _scaleAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.elasticOut));
 
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeIn),
-    );
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeIn));
 
     _controller.forward();
-    
+
     // Navigate after animation
     Timer(const Duration(milliseconds: 2000), () {
       if (mounted) {
@@ -1373,10 +1794,7 @@ class _TickAnimationState extends State<TickAnimation>
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              Colors.white,
-              Color(0xFFF0F8F0),
-            ],
+            colors: [Colors.white, Color(0xFFF0F8F0)],
           ),
         ),
         child: Center(
@@ -1399,11 +1817,7 @@ class _TickAnimationState extends State<TickAnimation>
                       ),
                     ],
                   ),
-                  child: const Icon(
-                    Icons.check,
-                    color: Colors.white,
-                    size: 60,
-                  ),
+                  child: const Icon(Icons.check, color: Colors.white, size: 60),
                 ),
               ),
               const SizedBox(height: 30),
@@ -1423,10 +1837,7 @@ class _TickAnimationState extends State<TickAnimation>
                 opacity: _fadeAnimation,
                 child: Text(
                   'Redirecting...',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.grey.shade600,
-                  ),
+                  style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
                 ),
               ),
             ],

@@ -14,16 +14,16 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+
+        // ✅ Enable core library desugaring
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
         jvmTarget = "17"
     }
-     // JVM Toolchain ensures consistency
-    
 
     defaultConfig {
-      
         applicationId = "com.geoat.app"
         minSdk = 24
         targetSdk = flutter.targetSdkVersion
@@ -33,21 +33,18 @@ android {
 
     buildTypes {
         release {
-           
             signingConfig = signingConfigs.getByName("debug")
         }
     }
 }
 
-
-
-
 dependencies {
-  // Import the Firebase BoM
-  implementation(platform("com.google.firebase:firebase-bom:34.2.0"))
+    // ✅ Core library desugaring required by flutter_local_notifications
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 
-  implementation("com.google.firebase:firebase-analytics")
-
+    // Firebase BoM
+    implementation(platform("com.google.firebase:firebase-bom:34.2.0"))
+    implementation("com.google.firebase:firebase-analytics")
 }
 
 flutter {
@@ -119,7 +116,7 @@ afterEvaluate {
     tasks.named("assembleDebug") {
         finalizedBy("copyDebugApkToFlutterLocation")
     }
-    
+
     tasks.named("assembleRelease") {
         finalizedBy("copyReleaseApkToFlutterLocation")
     }

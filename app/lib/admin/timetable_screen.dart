@@ -4,7 +4,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:csv/csv.dart';
 import 'package:excel/excel.dart' as excel_pkg;
 import 'dart:io';
-import 'dart:convert';
 
 class TimetableScreen extends StatefulWidget {
   const TimetableScreen({super.key});
@@ -1343,12 +1342,12 @@ class _UploadTimetableDialogState extends State<UploadTimetableDialog> {
                         style: const TextStyle(fontSize: 12),
                       ),
                     );
-                  }).toList(),
+                  }),
                 ],
               ),
             ),
           );
-        }).toList(),
+        }),
       ],
     );
   }
@@ -1620,8 +1619,9 @@ class _UploadTimetableDialogState extends State<UploadTimetableDialog> {
   }
 
   Future<void> _uploadTimetable() async {
-    if (!_formKey.currentState!.validate() || _processedTimetable == null)
+    if (!_formKey.currentState!.validate() || _processedTimetable == null) {
       return;
+    }
 
     setState(() => _isProcessing = true);
 
@@ -2097,7 +2097,7 @@ class TimetableDetailsDialog extends StatelessWidget {
                                           ),
                                         ],
                                       );
-                                    }).toList(),
+                                    }),
                                   ],
                                 ),
                               ],
