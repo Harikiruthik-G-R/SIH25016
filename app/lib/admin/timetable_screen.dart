@@ -33,7 +33,9 @@ class _TimetableScreenState extends State<TimetableScreen> {
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
-      await Future.wait([_loadGroups(), _loadTimetables(), _loadLocations()]);
+      await _loadGroups();
+      await _loadTimetables();
+      await _loadLocations(); // Load locations after timetables since they depend on timetable data
     } catch (e) {
       _showErrorSnackBar('Error loading data: $e');
     } finally {
@@ -68,23 +70,95 @@ class _TimetableScreenState extends State<TimetableScreen> {
               return data;
             }).toList();
       });
+      print('Loaded ${_timetables.length} timetables');
+      for (final timetable in _timetables) {
+        print('Timetable: ${timetable['name']}, ID: ${timetable['id']}');
+        final locations = timetable['locations'];
+        if (locations != null) {
+          print('  Locations: ${locations.runtimeType} - $locations');
+        }
+      }
     } catch (e) {
+      print('Error in _loadTimetables: $e');
       _showErrorSnackBar('Error loading timetables: $e');
     }
   }
 
   Future<void> _loadLocations() async {
     try {
-      final snapshot = await _firestore.collection('locations').get();
+      // Extract unique locations from all timetables
+      final locationMap = <String, Map<String, dynamic>>{};
+
+      print('Loading locations from ${_timetables.length} timetables');
+
+      for (final timetable in _timetables) {
+        final timetableLocations =
+            timetable['locations'] as Map<String, dynamic>?;
+        print(
+          'Timetable ${timetable['name']}: ${timetableLocations?.keys.toList()}',
+        );
+
+        if (timetableLocations != null) {
+          for (final entry in timetableLocations.entries) {
+            final locationName = entry.key;
+            final locationData = entry.value as Map<String, dynamic>?;
+
+            if (locationData == null) {
+              print('Warning: null location data for $locationName');
+              continue;
+            }
+
+            if (locationMap.containsKey(locationName)) {
+              // Location exists, add timetable to the list
+              final existingLocation = locationMap[locationName]!;
+              final timetableList = List<String>.from(
+                existingLocation['timetables'],
+              );
+              final timetableIdList = List<String>.from(
+                existingLocation['timetableIds'],
+              );
+
+              if (!timetableList.contains(timetable['name'])) {
+                timetableList.add(timetable['name']);
+              }
+              if (!timetableIdList.contains(timetable['id'])) {
+                timetableIdList.add(timetable['id']);
+              }
+
+              // Update the location with new lists
+              locationMap[locationName] = {
+                ...existingLocation,
+                'timetables': timetableList,
+                'timetableIds': timetableIdList,
+              };
+            } else {
+              // New location, create entry
+              locationMap[locationName] = {
+                'id': locationName, // Use location name as ID
+                'name': locationName,
+                'bounds':
+                    locationData['bounds'], // This could be null, that's okay
+                'timetables': <String>[
+                  timetable['name'],
+                ], // List of timetable names using this location
+                'timetableIds': <String>[
+                  timetable['id'],
+                ], // List of timetable IDs for editing
+              };
+            }
+          }
+        }
+      }
+
+      print(
+        'Extracted ${locationMap.length} unique locations: ${locationMap.keys.toList()}',
+      );
+
       setState(() {
-        _locations =
-            snapshot.docs.map((doc) {
-              final data = doc.data();
-              data['id'] = doc.id;
-              return data;
-            }).toList();
+        _locations = locationMap.values.toList();
       });
     } catch (e) {
+      print('Error in _loadLocations: $e');
       _showErrorSnackBar('Error loading locations: $e');
     }
   }
@@ -258,7 +332,7 @@ class _TimetableScreenState extends State<TimetableScreen> {
                 const SizedBox(width: 16),
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: _showAddLocationDialog,
+                    onPressed: _showLocationInfoDialog,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white.withOpacity(0.2),
                       foregroundColor: Colors.white,
@@ -268,9 +342,9 @@ class _TimetableScreenState extends State<TimetableScreen> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    icon: const Icon(Icons.add_location),
+                    icon: const Icon(Icons.info_outline),
                     label: const Text(
-                      'Add Location',
+                      'Location Info',
                       style: TextStyle(fontWeight: FontWeight.w600),
                     ),
                   ),
@@ -725,6 +799,7 @@ class _TimetableScreenState extends State<TimetableScreen> {
   Widget _buildEnhancedLocationCard(Map<String, dynamic> location, int index) {
     final name = location['name'] ?? 'Unknown Location';
     final bounds = location['bounds'] as Map<String, dynamic>?;
+    final timetables = location['timetables'] as List<String>? ?? [];
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -842,17 +917,71 @@ class _TimetableScreenState extends State<TimetableScreen> {
                   ),
                 ],
               ),
+              const SizedBox(height: 16),
+              // Show timetables using this location
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.schedule, size: 16, color: Colors.blue),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Used in ${timetables.length} timetable${timetables.length != 1 ? 's' : ''}:',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1565C0),
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children:
+                          timetables.map((timetableName) {
+                            return Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                timetableName,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF1565C0),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                    ),
+                  ],
+                ),
+              ),
               if (bounds != null) ...[
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
+                    color: Colors.green.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.my_location, size: 16, color: Colors.blue),
+                      Icon(Icons.my_location, size: 16, color: Colors.green),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -860,7 +989,7 @@ class _TimetableScreenState extends State<TimetableScreen> {
                           'Lng: ${_safeSubstring(bounds['topLeftLng']?.toString())}',
                           style: const TextStyle(
                             fontWeight: FontWeight.w600,
-                            color: Color(0xFF1565C0),
+                            color: Color(0xFF2E7D32),
                             fontSize: 12,
                           ),
                           overflow: TextOverflow.ellipsis,
@@ -941,15 +1070,38 @@ class _TimetableScreenState extends State<TimetableScreen> {
       builder:
           (context) => UploadTimetableDialog(
             groups: _groups,
-            onTimetableUploaded: _loadTimetables,
+            onTimetableUploaded: () async {
+              await _loadTimetables();
+              await _loadLocations(); // Reload locations after timetables
+            },
           ),
     );
   }
 
-  void _showAddLocationDialog() {
+  void _showLocationInfoDialog() {
     showDialog(
       context: context,
-      builder: (context) => AddLocationDialog(onLocationAdded: _loadLocations),
+      builder:
+          (context) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.info_outline, color: Color(0xFF4CAF50)),
+                SizedBox(width: 8),
+                Text('Location Management'),
+              ],
+            ),
+            content: const Text(
+              'Locations are automatically created when you upload timetables. '
+              'You can edit existing location coordinates, but new locations '
+              'should be added through timetable uploads.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
     );
   }
 
@@ -995,7 +1147,10 @@ class _TimetableScreenState extends State<TimetableScreen> {
       builder:
           (context) => AddLocationDialog(
             location: location,
-            onLocationAdded: _loadLocations,
+            onLocationAdded: () async {
+              await _loadTimetables();
+              await _loadLocations(); // Reload locations after timetables
+            },
           ),
     );
   }
@@ -1072,9 +1227,39 @@ class _TimetableScreenState extends State<TimetableScreen> {
 
   Future<void> _deleteLocation(String locationId) async {
     try {
-      await _firestore.collection('locations').doc(locationId).delete();
-      _showSuccessSnackBar('Location deleted successfully');
-      _loadLocations();
+      // Find the location by its name (locationId is actually the location name)
+      final locationToDelete = _locations.firstWhere(
+        (loc) => loc['id'] == locationId,
+        orElse: () => {},
+      );
+
+      if (locationToDelete.isEmpty) {
+        _showErrorSnackBar('Location not found');
+        return;
+      }
+
+      final locationName = locationToDelete['name'];
+      final timetableIds =
+          locationToDelete['timetableIds'] as List<String>? ?? [];
+
+      // Remove location from all affected timetables
+      final batch = FirebaseFirestore.instance.batch();
+
+      for (final timetableId in timetableIds) {
+        final timetableRef = FirebaseFirestore.instance
+            .collection('timetables')
+            .doc(timetableId);
+
+        batch.update(timetableRef, {
+          'locations.$locationName': FieldValue.delete(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      await batch.commit();
+      _showSuccessSnackBar('Location deleted from all timetables');
+      _loadTimetables(); // Reload timetables first
+      _loadLocations(); // Then reload locations
     } catch (e) {
       _showErrorSnackBar('Error deleting location: $e');
     }
@@ -1490,18 +1675,23 @@ class _UploadTimetableDialogState extends State<UploadTimetableDialog> {
       if (_parsedData!.length == 2 && _parsedData![1].length == 1) {
         final concatenatedData = _parsedData![1][0].toString();
         print('Detected concatenated data, splitting...');
-        
+
         // Split the concatenated string by common patterns
-        final dataLines = concatenatedData
-            .split(RegExp(r'(?=Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)'))
-            .where((line) => line.trim().isNotEmpty)
-            .toList();
-        
+        final dataLines =
+            concatenatedData
+                .split(
+                  RegExp(
+                    r'(?=Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)',
+                  ),
+                )
+                .where((line) => line.trim().isNotEmpty)
+                .toList();
+
         print('Split into ${dataLines.length} data lines');
-        
+
         // Reconstruct _parsedData with proper rows
         _parsedData = [_parsedData![0]]; // Keep header
-        
+
         for (final line in dataLines) {
           final cleanLine = line.trim().replaceAll(RegExp(r'\s+'), ' ');
           final parts = cleanLine.split(', ');
@@ -1510,7 +1700,7 @@ class _UploadTimetableDialogState extends State<UploadTimetableDialog> {
             print('Added row: $parts');
           }
         }
-        
+
         print('Reconstructed CSV with ${_parsedData!.length} rows');
       }
 
@@ -1642,27 +1832,9 @@ class _UploadTimetableDialogState extends State<UploadTimetableDialog> {
       };
 
       // Save timetable
-      final timetableRef = await FirebaseFirestore.instance
+      await FirebaseFirestore.instance
           .collection('timetables')
           .add(timetableData);
-
-      // Save locations to locations collection
-      final locations =
-          _processedTimetable!['locations'] as Map<String, dynamic>;
-      for (final entry in locations.entries) {
-        final locationData = entry.value as Map<String, dynamic>;
-        final locationToSave = {
-          'name': entry.key,
-          'bounds': locationData['bounds'],
-          'timetableId': timetableRef.id,
-          'groupId': _selectedGroupId,
-          'createdAt': FieldValue.serverTimestamp(),
-        };
-
-        await FirebaseFirestore.instance
-            .collection('locations')
-            .add(locationToSave);
-      }
 
       Navigator.pop(context);
       widget.onTimetableUploaded();
@@ -1897,27 +2069,52 @@ class _AddLocationDialogState extends State<AddLocationDialog> {
     setState(() => _isLoading = true);
 
     try {
-      final locationData = {
-        'name': _nameController.text,
-        'bounds': {
-          'topLeftLat': double.parse(_topLeftLatController.text),
-          'topLeftLng': double.parse(_topLeftLngController.text),
-          'bottomRightLat': double.parse(_bottomRightLatController.text),
-          'bottomRightLng': double.parse(_bottomRightLngController.text),
-        },
-        'updatedAt': FieldValue.serverTimestamp(),
+      final newLocationData = {
+        'topLeftLat': double.parse(_topLeftLatController.text),
+        'topLeftLng': double.parse(_topLeftLngController.text),
+        'bottomRightLat': double.parse(_bottomRightLatController.text),
+        'bottomRightLng': double.parse(_bottomRightLngController.text),
       };
 
       if (widget.location != null) {
-        await FirebaseFirestore.instance
-            .collection('locations')
-            .doc(widget.location!['id'])
-            .update(locationData);
+        // Editing existing location - update in all timetables that use it
+        final locationName = widget.location!['name'];
+        final timetableIds =
+            widget.location!['timetableIds'] as List<String>? ?? [];
+
+        // Update location in all affected timetables
+        final batch = FirebaseFirestore.instance.batch();
+
+        for (final timetableId in timetableIds) {
+          final timetableRef = FirebaseFirestore.instance
+              .collection('timetables')
+              .doc(timetableId);
+
+          batch.update(timetableRef, {
+            'locations.$locationName.bounds': newLocationData,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+
+        await batch.commit();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Location updated in all timetables'),
+            backgroundColor: Color(0xFF4CAF50),
+          ),
+        );
       } else {
-        locationData['createdAt'] = FieldValue.serverTimestamp();
-        await FirebaseFirestore.instance
-            .collection('locations')
-            .add(locationData);
+        // Adding new location - this functionality might be removed since locations
+        // are now managed through timetable uploads
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'New locations should be added through timetable uploads',
+            ),
+            backgroundColor: Colors.orange,
+          ),
+        );
       }
 
       Navigator.pop(context);

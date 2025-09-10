@@ -54,7 +54,8 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
   String? _currentRoomOrLocationName;
   DateTime? _periodStart;
   DateTime? _periodEnd;
-  String? _campusName; // which location doc matched (e.g., "Lab 2", "Fort", etc.)
+  String?
+  _campusName; // which location doc matched (e.g., "Lab 2", "Fort", etc.)
   String? _nextSubject;
 
   // Location bounds from all campus/location docs for this group
@@ -102,7 +103,7 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
       duration: const Duration(milliseconds: 500),
       vsync: this,
     );
-    
+
     _fadeController.forward();
   }
 
@@ -128,16 +129,19 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
     try {
       final prefs = await SharedPreferences.getInstance();
       final sessionId = prefs.getString('active_session_${widget.rollNumber}');
-      final checkInTimeStr = prefs.getString('checkin_time_${widget.rollNumber}');
-      
+      final checkInTimeStr = prefs.getString(
+        'checkin_time_${widget.rollNumber}',
+      );
+
       if (sessionId != null && checkInTimeStr != null) {
-        final sessionDoc = await _db
-            .collection('student_checkins')
-            .doc(widget.rollNumber)
-            .collection('sessions')
-            .doc(sessionId)
-            .get();
-            
+        final sessionDoc =
+            await _db
+                .collection('student_checkins')
+                .doc(widget.rollNumber)
+                .collection('sessions')
+                .doc(sessionId)
+                .get();
+
         if (sessionDoc.exists && sessionDoc.data()?['status'] == 'ongoing') {
           setState(() {
             _activeSessionDocId = sessionId;
@@ -161,8 +165,14 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
   Future<void> _saveSession() async {
     if (_activeSessionDocId != null && _checkInTime != null) {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('active_session_${widget.rollNumber}', _activeSessionDocId!);
-      await prefs.setString('checkin_time_${widget.rollNumber}', _checkInTime!.toIso8601String());
+      await prefs.setString(
+        'active_session_${widget.rollNumber}',
+        _activeSessionDocId!,
+      );
+      await prefs.setString(
+        'checkin_time_${widget.rollNumber}',
+        _checkInTime!.toIso8601String(),
+      );
     }
   }
 
@@ -200,29 +210,30 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
   void _showErrorDialog(String message) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.error_outline, color: Colors.red),
-            SizedBox(width: 8),
-            Text('Error'),
-          ],
-        ),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _primeData(); // Retry
-            },
-            child: const Text('Retry'),
+      builder:
+          (context) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.error_outline, color: Colors.red),
+                SizedBox(width: 8),
+                Text('Error'),
+              ],
+            ),
+            content: Text(message),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _primeData(); // Retry
+                },
+                child: const Text('Retry'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
     );
   }
 
@@ -230,33 +241,34 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
   void _showSuccessDialog(String title, String message) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: const BoxDecoration(
-                color: Color(0xFFE8F5E9),
-                shape: BoxShape.circle,
+      builder:
+          (context) => AlertDialog(
+            title: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFE8F5E9),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.check, color: Color(0xFF2E7D32)),
+                ),
+                const SizedBox(width: 12),
+                Text(title),
+              ],
+            ),
+            content: Text(message),
+            actions: [
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2E7D32),
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('OK'),
               ),
-              child: const Icon(Icons.check, color: Color(0xFF2E7D32)),
-            ),
-            const SizedBox(width: 12),
-            Text(title),
-          ],
-        ),
-        content: Text(message),
-        actions: [
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2E7D32),
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('OK'),
+            ],
           ),
-        ],
-      ),
     );
   }
 
@@ -264,7 +276,7 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
   Future<bool> _checkAndRequestPermissions() async {
     try {
       _log("Checking location permissions...");
-      
+
       // Check if location services are enabled
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
@@ -285,13 +297,17 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
 
       if (permission == LocationPermission.deniedForever) {
         _log("Location permission permanently denied.");
-        _showErrorDialog("Location permission permanently denied. Please enable in app settings.");
+        _showErrorDialog(
+          "Location permission permanently denied. Please enable in app settings.",
+        );
         return false;
       }
 
       if (permission == LocationPermission.denied) {
         _log("Location permission denied by user.");
-        _showErrorDialog("Location permission is required for attendance marking.");
+        _showErrorDialog(
+          "Location permission is required for attendance marking.",
+        );
         return false;
       }
 
@@ -304,7 +320,9 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
           if (bgPermission.isGranted) {
             _log("Background location permission granted.");
           } else {
-            _log("Background location permission not granted, continuing with foreground only.");
+            _log(
+              "Background location permission not granted, continuing with foreground only.",
+            );
           }
         } catch (e) {
           _log("Background permission request failed (non-fatal): $e");
@@ -319,38 +337,74 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
     }
   }
 
-  // Loads all locations with groupId and pulls their timetableId for later
-  // We support multiple campus entries (Railway/Fort/etc.)
+  // Loads locations from timetables collection for the group
+  // Reads location bounds directly from timetable documents
   Future<void> _loadGroupLocationsAndTimetable() async {
     _allowedBounds.clear();
 
-    final q = await _db
-        .collection('locations')
-        .where('groupId', isEqualTo: widget.groupId)
-        .get();
+    try {
+      // Query timetables for this group
+      final q =
+          await _db
+              .collection('timetables')
+              .where('groupId', isEqualTo: widget.groupId)
+              .get();
 
-    if (q.docs.isEmpty) {
-      _log("No locations found for group ${widget.groupId}");
-      return;
-    }
-
-    for (final d in q.docs) {
-      final data = d.data();
-      final bounds = data['bounds'] as Map<String, dynamic>?;
-      if (bounds == null) continue;
-
-      final timetableId = data['timetableId'] as String?;
-      final campusName = (data['name'] as String?)?.trim();
-
-      final box = _BoundsBox.fromMap(bounds);
-      if (box != null) {
-        _allowedBounds.add(
-          box.copyWith(
-            timetableId: timetableId,
-            campusName: campusName ?? d.id,
-          ),
-        );
+      if (q.docs.isEmpty) {
+        _log("No timetables found for group ${widget.groupId}");
+        return;
       }
+
+      _log("Found ${q.docs.length} timetable(s) for group ${widget.groupId}");
+
+      for (final d in q.docs) {
+        final data = d.data();
+        final timetableId = d.id;
+
+        // Read locations from the timetable document
+        final locations = data['locations'] as Map<String, dynamic>?;
+        if (locations == null) {
+          _log("No locations found in timetable $timetableId");
+          continue;
+        }
+
+        _log(
+          "Processing ${locations.length} locations from timetable $timetableId",
+        );
+
+        // Process each location in the timetable
+        for (final entry in locations.entries) {
+          final locationName = entry.key;
+          final locationData = entry.value as Map<String, dynamic>?;
+
+          if (locationData == null) continue;
+
+          final bounds = locationData['bounds'] as Map<String, dynamic>?;
+          if (bounds == null) {
+            _log("No bounds found for location $locationName");
+            continue;
+          }
+
+          _log("Loading bounds for location: $locationName");
+
+          final box = _BoundsBox.fromMap(bounds);
+          if (box != null) {
+            _allowedBounds.add(
+              box.copyWith(timetableId: timetableId, campusName: locationName),
+            );
+            _log(
+              "Added bounds for $locationName: ${bounds['topLeftLat']}, ${bounds['topLeftLng']} to ${bounds['bottomRightLat']}, ${bounds['bottomRightLng']}",
+            );
+          } else {
+            _log("Failed to parse bounds for location $locationName");
+          }
+        }
+      }
+
+      _log("Total locations loaded: ${_allowedBounds.length}");
+    } catch (e, st) {
+      _log("Error loading locations from timetables: $e");
+      print(st);
     }
   }
 
@@ -370,8 +424,20 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
       final endHour = int.parse(endParts[0]);
       final endMinute = int.parse(endParts[1]);
 
-      final startTime = DateTime(now.year, now.month, now.day, startHour, startMinute);
-      DateTime endTime = DateTime(now.year, now.month, now.day, endHour, endMinute);
+      final startTime = DateTime(
+        now.year,
+        now.month,
+        now.day,
+        startHour,
+        startMinute,
+      );
+      DateTime endTime = DateTime(
+        now.year,
+        now.month,
+        now.day,
+        endHour,
+        endMinute,
+      );
 
       // Handle cases where end time is next day (like 23:00-01:00)
       if (endTime.isBefore(startTime)) {
@@ -398,10 +464,13 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
     }
 
     // Get timetableId from first available bounds
-    final timetableId = _allowedBounds.firstWhere(
-      (b) => b.timetableId != null,
-      orElse: () => _allowedBounds.first,
-    ).timetableId;
+    final timetableId =
+        _allowedBounds
+            .firstWhere(
+              (b) => b.timetableId != null,
+              orElse: () => _allowedBounds.first,
+            )
+            .timetableId;
 
     if (timetableId == null) {
       _log("No timetableId linked to locations; cannot resolve period.");
@@ -411,14 +480,12 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
     try {
       final now = DateTime.now();
       final dayName = _weekdayName(now.weekday);
-      
+
       _log("Checking timetable for $dayName in document: $timetableId");
 
       // Query the correct structure: timetables/{id}/schedule/{DayName}/{period}
-      final timetableDoc = await _db
-          .collection('timetables')
-          .doc(timetableId)
-          .get();
+      final timetableDoc =
+          await _db.collection('timetables').doc(timetableId).get();
 
       if (!timetableDoc.exists) {
         _log("Timetable document $timetableId not found");
@@ -457,42 +524,54 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
       for (final entry in daySchedule.entries) {
         final periodKey = entry.key;
         final periodData = entry.value as Map<String, dynamic>?;
-        
+
         if (periodData == null) continue;
-        
+
         final timeRange = periodData['time'] as String?;
         if (timeRange == null) continue;
-        
-        _log("Checking period $periodKey: ${periodData['subject']} at $timeRange");
-        
+
+        _log(
+          "Checking period $periodKey: ${periodData['subject']} at $timeRange",
+        );
+
         if (_isWithinTimeRange(timeRange)) {
           currentPeriodKey = periodKey;
           currentPeriodData = periodData;
-          _log("✅ Found active period $periodKey: ${periodData['subject']} at $timeRange");
+          _log(
+            "✅ Found active period $periodKey: ${periodData['subject']} at $timeRange",
+          );
           break;
         } else {
-          _log("❌ Not in active period $periodKey: ${periodData['subject']} at $timeRange");
+          _log(
+            "❌ Not in active period $periodKey: ${periodData['subject']} at $timeRange",
+          );
         }
       }
 
       if (currentPeriodData != null && currentPeriodKey != null) {
         final timeRange = currentPeriodData['time'] as String;
         final timeParts = timeRange.split('-');
-        
+
         // Parse start and end times
         final startParts = timeParts[0].split(':');
         final endParts = timeParts[1].split(':');
-        
+
         final startTime = DateTime(
-          now.year, now.month, now.day,
-          int.parse(startParts[0]), int.parse(startParts[1])
+          now.year,
+          now.month,
+          now.day,
+          int.parse(startParts[0]),
+          int.parse(startParts[1]),
         );
-        
+
         DateTime endTime = DateTime(
-          now.year, now.month, now.day,
-          int.parse(endParts[0]), int.parse(endParts[1])
+          now.year,
+          now.month,
+          now.day,
+          int.parse(endParts[0]),
+          int.parse(endParts[1]),
         );
-        
+
         // Handle next day end time
         if (endTime.isBefore(startTime)) {
           endTime = endTime.add(const Duration(days: 1));
@@ -501,20 +580,24 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
         // Find next period (period number + 1)
         final currentPeriodNum = int.tryParse(currentPeriodKey) ?? 0;
         final nextPeriodKeyToCheck = (currentPeriodNum + 1).toString();
-        nextPeriodData = daySchedule[nextPeriodKeyToCheck] as Map<String, dynamic>?;
+        nextPeriodData =
+            daySchedule[nextPeriodKeyToCheck] as Map<String, dynamic>?;
 
         if (mounted) {
           setState(() {
             _currentPeriod = currentPeriodNum;
             _currentSubject = currentPeriodData!['subject']?.toString();
-            _currentRoomOrLocationName = currentPeriodData['location']?.toString();
+            _currentRoomOrLocationName =
+                currentPeriodData['location']?.toString();
             _periodStart = startTime;
             _periodEnd = endTime;
             _nextSubject = nextPeriodData?['subject']?.toString();
           });
         }
 
-        _log("Current period: P$_currentPeriod ($_currentSubject) until ${_fmtHM(endTime)}");
+        _log(
+          "Current period: P$_currentPeriod ($_currentSubject) until ${_fmtHM(endTime)}",
+        );
         if (_nextSubject != null) {
           _log("Next subject: $_nextSubject");
         }
@@ -522,7 +605,6 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
         _log("No active period found for current time");
         _resetPeriodState();
       }
-
     } catch (e, st) {
       _log("Error querying Firestore timetable: $e");
       print(st);
@@ -547,11 +629,14 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
     try {
       final parts = timeRange.split('-');
       if (parts.isEmpty) return null;
-      
+
       final startParts = parts[0].split(':');
       return DateTime(
-        baseDate.year, baseDate.month, baseDate.day,
-        int.parse(startParts[0]), int.parse(startParts[1])
+        baseDate.year,
+        baseDate.month,
+        baseDate.day,
+        int.parse(startParts[0]),
+        int.parse(startParts[1]),
       );
     } catch (e) {
       return null;
@@ -600,7 +685,10 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
 
       setState(() => _checkInStatus = 'Validating campus bounds...');
       // Validate inside ANY allowed bounds (Railway/Fort/etc.)
-      final inside = _firstBoundsContaining(position.latitude, position.longitude);
+      final inside = _firstBoundsContaining(
+        position.latitude,
+        position.longitude,
+      );
       if (inside == null) {
         _showErrorDialog("You are not within an allowed campus boundary.");
         _log("Check-in blocked: outside all bounds.");
@@ -648,8 +736,10 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
       // Save session to local storage
       await _saveSession();
 
-      _log("Checked in for period $_currentPeriod ($_currentSubject) at $_campusName.");
-      
+      _log(
+        "Checked in for period $_currentPeriod ($_currentSubject) at $_campusName.",
+      );
+
       // Show success dialog
       _showSuccessDialog(
         'Check-in Successful!',
@@ -710,7 +800,7 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
         checkoutLat: position?.latitude,
         checkoutLng: position?.longitude,
       );
-      
+
       _showSuccessDialog(
         'Checkout Successful!',
         'You have been checked out successfully. Your attendance has been recorded.',
@@ -740,7 +830,7 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
         checkoutLat: position?.latitude,
         checkoutLng: position?.longitude,
       );
-      
+
       _showSuccessDialog(
         'Period Ended',
         'Your attendance session has been automatically completed.',
@@ -795,11 +885,14 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
       'status': 'completed',
       'durationMinutes': durationMinutes,
       'closeReason': reason,
-      'logs': FieldValue.arrayUnion(
-          ['checkout $reason at ${now.toIso8601String()}']),
+      'logs': FieldValue.arrayUnion([
+        'checkout $reason at ${now.toIso8601String()}',
+      ]),
     });
 
-    _log("Session ${_activeSessionDocId!} closed. Duration: ${durationMinutes.toStringAsFixed(1)} min.");
+    _log(
+      "Session ${_activeSessionDocId!} closed. Duration: ${durationMinutes.toStringAsFixed(1)} min.",
+    );
 
     // Reset UI flags
     if (mounted) {
@@ -884,7 +977,7 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
         _log("Requesting location permission...");
         permission = await Geolocator.requestPermission();
         _log("Permission request result: $permission");
-        
+
         if (permission != LocationPermission.always &&
             permission != LocationPermission.whileInUse) {
           _log("Location permission not granted.");
@@ -894,7 +987,7 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
 
       // Try multiple strategies to get location
       Position? position;
-      
+
       // Strategy 1: High accuracy with longer timeout
       try {
         _log("Attempting high accuracy location...");
@@ -902,7 +995,9 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
           desiredAccuracy: LocationAccuracy.high,
           timeLimit: const Duration(seconds: 15),
         );
-        _log("High accuracy position obtained: ${position.latitude}, ${position.longitude}");
+        _log(
+          "High accuracy position obtained: ${position.latitude}, ${position.longitude}",
+        );
         return position;
       } catch (e) {
         _log("High accuracy failed: $e");
@@ -915,7 +1010,9 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
           desiredAccuracy: LocationAccuracy.medium,
           timeLimit: const Duration(seconds: 10),
         );
-        _log("Medium accuracy position obtained: ${position.latitude}, ${position.longitude}");
+        _log(
+          "Medium accuracy position obtained: ${position.latitude}, ${position.longitude}",
+        );
         return position;
       } catch (e) {
         _log("Medium accuracy failed: $e");
@@ -928,7 +1025,9 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
           desiredAccuracy: LocationAccuracy.low,
           timeLimit: const Duration(seconds: 8),
         );
-        _log("Low accuracy position obtained: ${position.latitude}, ${position.longitude}");
+        _log(
+          "Low accuracy position obtained: ${position.latitude}, ${position.longitude}",
+        );
         return position;
       } catch (e) {
         _log("Low accuracy failed: $e");
@@ -939,7 +1038,9 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
         _log("Attempting to get last known position...");
         position = await Geolocator.getLastKnownPosition();
         if (position != null) {
-          _log("Last known position obtained: ${position.latitude}, ${position.longitude}");
+          _log(
+            "Last known position obtained: ${position.latitude}, ${position.longitude}",
+          );
           return position;
         }
       } catch (e) {
@@ -948,7 +1049,6 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
 
       _log("All location strategies failed.");
       return null;
-
     } catch (e) {
       _log("Error in location process: $e");
       return null;
@@ -981,25 +1081,31 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
   }) {
     return showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false), 
-            child: Text(cancelText),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true), 
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2E7D32),
-              foregroundColor: Colors.white,
+      builder:
+          (_) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
             ),
-            child: Text(confirmText),
+            title: Text(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            content: Text(message),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(cancelText),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2E7D32),
+                  foregroundColor: Colors.white,
+                ),
+                child: Text(confirmText),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 
@@ -1011,7 +1117,7 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
       'Thursday',
       'Friday',
       'Saturday',
-      'Sunday'
+      'Sunday',
     ];
     return names[(weekday - 1) % 7];
   }
@@ -1042,7 +1148,8 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
   // --------------------------
   @override
   Widget build(BuildContext context) {
-    final canCheckIn = !_checkedIn &&
+    final canCheckIn =
+        !_checkedIn &&
         !_loading &&
         _currentPeriod != null &&
         _periodStart != null &&
@@ -1050,20 +1157,26 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
 
     final canCheckOut = _checkedIn && !_loading;
 
-    final remainingStr = _periodEnd == null
-        ? "-"
-        : _fmtDuration(_periodEnd!.difference(DateTime.now()));
+    final remainingStr =
+        _periodEnd == null
+            ? "-"
+            : _fmtDuration(_periodEnd!.difference(DateTime.now()));
 
-    final progress = _periodStart != null && _periodEnd != null
-        ? _progressPct(_periodStart!, _periodEnd!, DateTime.now())
-        : 0.0;
+    final progress =
+        _periodStart != null && _periodEnd != null
+            ? _progressPct(_periodStart!, _periodEnd!, DateTime.now())
+            : 0.0;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFB),
       appBar: AppBar(
         title: const Text(
           'Mark Attendance',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20),
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+          ),
         ),
         backgroundColor: const Color(0xFF2E7D32),
         elevation: 0,
@@ -1106,7 +1219,11 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
                           color: Colors.white.withOpacity(0.2),
                           borderRadius: BorderRadius.circular(16),
                         ),
-                        child: const Icon(Icons.person, color: Colors.white, size: 32),
+                        child: const Icon(
+                          Icons.person,
+                          color: Colors.white,
+                          size: 32,
+                        ),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
@@ -1140,7 +1257,9 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.15),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.white.withOpacity(0.3)),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.3),
+                        ),
                       ),
                       child: Row(
                         children: [
@@ -1265,36 +1384,42 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
       child: ElevatedButton(
         onPressed: onPressed,
         style: ElevatedButton.styleFrom(
-          backgroundColor: onPressed != null ? backgroundColor : Colors.grey.shade300,
-          foregroundColor: onPressed != null ? Colors.white : Colors.grey.shade600,
+          backgroundColor:
+              onPressed != null ? backgroundColor : Colors.grey.shade300,
+          foregroundColor:
+              onPressed != null ? Colors.white : Colors.grey.shade600,
           elevation: onPressed != null ? 4 : 0,
           shadowColor: backgroundColor.withOpacity(0.3),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
         ),
-        child: isLoading
-            ? SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    onPressed != null ? Colors.white : Colors.grey.shade600,
+        child:
+            isLoading
+                ? SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      onPressed != null ? Colors.white : Colors.grey.shade600,
+                    ),
                   ),
+                )
+                : Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(icon, size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ],
                 ),
-              )
-            : Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(icon, size: 20),
-                  const SizedBox(width: 8),
-                  Text(
-                    label,
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-                  ),
-                ],
-              ),
       ),
     );
   }
@@ -1364,9 +1489,9 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
               _buildStatusBadge(canCheckIn, canCheckOut),
             ],
           ),
-          
+
           const SizedBox(height: 20),
-          
+
           // Current and Next Period Info
           Row(
             children: [
@@ -1437,7 +1562,9 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
             const SizedBox(height: 8),
             Center(
               child: Text(
-                remainingStr != "-" ? "$remainingStr remaining" : "No active period",
+                remainingStr != "-"
+                    ? "$remainingStr remaining"
+                    : "No active period",
                 style: TextStyle(
                   fontSize: 14,
                   color: Colors.grey.shade700,
@@ -1498,13 +1625,18 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: List.generate(5, (index) {
                   final delay = index * 0.2;
-                  final animationValue = (_waveController.value - delay).clamp(0.0, 1.0);
+                  final animationValue = (_waveController.value - delay).clamp(
+                    0.0,
+                    1.0,
+                  );
                   return Container(
                     margin: const EdgeInsets.symmetric(horizontal: 2),
                     width: 6,
                     height: 20 + (10 * math.sin(animationValue * math.pi)),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF2E7D32).withOpacity(0.3 + (0.7 * animationValue)),
+                      color: const Color(
+                        0xFF2E7D32,
+                      ).withOpacity(0.3 + (0.7 * animationValue)),
                       borderRadius: BorderRadius.circular(3),
                     ),
                   );
@@ -1611,10 +1743,7 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
         ),
         Text(
           location,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey.shade600,
-          ),
+          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
@@ -1665,10 +1794,16 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
             ],
           ),
           const SizedBox(height: 16),
-          _buildDetailRow("Check-in Time", _checkInTime != null ? _fmtTime(_checkInTime!) : "—"),
+          _buildDetailRow(
+            "Check-in Time",
+            _checkInTime != null ? _fmtTime(_checkInTime!) : "—",
+          ),
           _buildDetailRow("Duration", _getSessionDuration()),
           _buildDetailRow("Campus", _campusName ?? "—"),
-          _buildDetailRow("Session ID", _activeSessionDocId?.substring(0, 8) ?? "—"),
+          _buildDetailRow(
+            "Session ID",
+            _activeSessionDocId?.substring(0, 8) ?? "—",
+          ),
           if (_periodEnd != null) ...[
             const SizedBox(height: 12),
             Container(
@@ -1680,7 +1815,11 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.schedule, color: Color(0xFFFF9800), size: 20),
+                  const Icon(
+                    Icons.schedule,
+                    color: Color(0xFFFF9800),
+                    size: 20,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(

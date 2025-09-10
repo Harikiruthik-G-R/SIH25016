@@ -1,6 +1,7 @@
 import 'package:GeoAt/admin/admin_home.dart';
 import 'package:GeoAt/sessionmanager.dart';
 import 'package:GeoAt/users/users_home.dart';
+import 'package:GeoAt/users/group_selection.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:io';
@@ -16,7 +17,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   try {
     await Firebase.initializeApp();
     debugPrint('Firebase initialized successfully');
@@ -26,7 +27,7 @@ void main() async {
     runApp(const FirebaseErrorApp());
     return;
   }
-  
+
   // Initialize background service after a delay to ensure everything is ready
   try {
     await initializeService();
@@ -35,7 +36,7 @@ void main() async {
     debugPrint('Background service initialization failed: $e');
     // Continue without background service - don't crash the app
   }
-  
+
   runApp(const MyApp());
 }
 
@@ -56,7 +57,8 @@ Future<void> initializeService() async {
   if (Platform.isAndroid) {
     await flutterLocalNotificationsPlugin
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
+          AndroidFlutterLocalNotificationsPlugin
+        >()
         ?.createNotificationChannel(channel);
   }
 
@@ -85,7 +87,7 @@ Future<void> startBackgroundService() async {
   try {
     final service = FlutterBackgroundService();
     final isRunning = await service.isRunning();
-    
+
     if (!isRunning) {
       await service.startService();
       debugPrint('Background service started');
@@ -100,7 +102,7 @@ Future<void> stopBackgroundService() async {
   try {
     final service = FlutterBackgroundService();
     final isRunning = await service.isRunning();
-    
+
     if (isRunning) {
       service.invoke('stopService');
       debugPrint('Background service stopped');
@@ -202,12 +204,12 @@ void onStart(ServiceInstance service) async {
             await preferences.reload();
             final log = preferences.getStringList('log') ?? <String>[];
             log.add(DateTime.now().toIso8601String());
-            
+
             // Keep only last 50 entries to prevent memory issues
             if (log.length > 50) {
               log.removeRange(0, log.length - 50);
             }
-            
+
             await preferences.setStringList('log', log);
           } catch (e) {
             debugPrint('Error updating preferences: $e');
@@ -231,16 +233,20 @@ Future<void> _updateAttendanceStatus() async {
   try {
     final prefs = await SharedPreferences.getInstance();
     final keys = prefs.getKeys();
-    
+
     // Find active sessions for all users
     for (final key in keys) {
       if (key.startsWith('active_session_')) {
         final rollNumber = key.split('active_session_')[1];
         final sessionId = prefs.getString(key);
         final checkInTimeStr = prefs.getString('checkin_time_$rollNumber');
-        
+
         if (sessionId != null && checkInTimeStr != null) {
-          await _validateAndUpdateSession(rollNumber, sessionId, checkInTimeStr);
+          await _validateAndUpdateSession(
+            rollNumber,
+            sessionId,
+            checkInTimeStr,
+          );
         }
       }
     }
@@ -249,10 +255,14 @@ Future<void> _updateAttendanceStatus() async {
   }
 }
 
-Future<void> _validateAndUpdateSession(String rollNumber, String sessionId, String checkInTimeStr) async {
+Future<void> _validateAndUpdateSession(
+  String rollNumber,
+  String sessionId,
+  String checkInTimeStr,
+) async {
   try {
     final db = FirebaseFirestore.instance;
-    
+
     // Add timeout and error handling for Firestore operations
     final sessionDoc = await db
         .collection('student_checkins')
@@ -261,7 +271,7 @@ Future<void> _validateAndUpdateSession(String rollNumber, String sessionId, Stri
         .doc(sessionId)
         .get()
         .timeout(const Duration(seconds: 15));
-        
+
     if (!sessionDoc.exists || sessionDoc.data()?['status'] != 'ongoing') {
       // Session is invalid, clear it
       final prefs = await SharedPreferences.getInstance();
@@ -275,42 +285,41 @@ Future<void> _validateAndUpdateSession(String rollNumber, String sessionId, Stri
     bool locationPermissionGranted = false;
     try {
       LocationPermission permission = await Geolocator.checkPermission();
-      locationPermissionGranted = permission == LocationPermission.always || 
-                                 permission == LocationPermission.whileInUse;
+      locationPermissionGranted =
+          permission == LocationPermission.always ||
+          permission == LocationPermission.whileInUse;
     } catch (e) {
       debugPrint('Location permission check failed: $e');
     }
 
-    Map<String, dynamic> updateData = {
-      'lastLocationUpdate': Timestamp.now(),
-    };
+    Map<String, dynamic> updateData = {'lastLocationUpdate': Timestamp.now()};
 
     if (locationPermissionGranted) {
       try {
         final position = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.medium,
         ).timeout(const Duration(seconds: 15));
-        
+
         updateData.addAll({
           'lastKnownLat': position.latitude,
           'lastKnownLng': position.longitude,
         });
-        
+
         updateData['logs'] = FieldValue.arrayUnion([
-          'background_location_update at ${DateTime.now().toIso8601String()}'
+          'background_location_update at ${DateTime.now().toIso8601String()}',
         ]);
-        
+
         debugPrint('Updated session $sessionId for $rollNumber with location');
       } catch (e) {
         debugPrint('Location update failed for session $sessionId: $e');
-        
+
         updateData['logs'] = FieldValue.arrayUnion([
-          'background_ping at ${DateTime.now().toIso8601String()} (no location)'
+          'background_ping at ${DateTime.now().toIso8601String()} (no location)',
         ]);
       }
     } else {
       updateData['logs'] = FieldValue.arrayUnion([
-        'background_ping at ${DateTime.now().toIso8601String()} (no permission)'
+        'background_ping at ${DateTime.now().toIso8601String()} (no permission)',
       ]);
     }
 
@@ -325,22 +334,22 @@ Future<void> _validateAndUpdateSession(String rollNumber, String sessionId, Stri
 
     // Check if session should be auto-ended
     final sessionData = sessionDoc.data()!;
-    final expectedEndAt = (sessionData['expectedEndAt'] as Timestamp?)?.toDate();
-    
+    final expectedEndAt =
+        (sessionData['expectedEndAt'] as Timestamp?)?.toDate();
+
     if (expectedEndAt != null && DateTime.now().isAfter(expectedEndAt)) {
       await _autoEndSession(db, rollNumber, sessionId, sessionData);
     }
-
   } catch (e) {
     debugPrint('Session validation error for $rollNumber: $e');
   }
 }
 
 Future<void> _autoEndSession(
-  FirebaseFirestore db, 
-  String rollNumber, 
-  String sessionId, 
-  Map<String, dynamic> sessionData
+  FirebaseFirestore db,
+  String rollNumber,
+  String sessionId,
+  Map<String, dynamic> sessionData,
 ) async {
   try {
     final now = DateTime.now();
@@ -353,14 +362,15 @@ Future<void> _autoEndSession(
         .collection('sessions')
         .doc(sessionId)
         .update({
-      'checkOutAt': Timestamp.fromDate(now),
-      'status': 'completed',
-      'durationMinutes': durationMinutes,
-      'closeReason': 'background_auto_end',
-      'logs': FieldValue.arrayUnion([
-        'background_auto_end at ${now.toIso8601String()}'
-      ]),
-    }).timeout(const Duration(seconds: 15));
+          'checkOutAt': Timestamp.fromDate(now),
+          'status': 'completed',
+          'durationMinutes': durationMinutes,
+          'closeReason': 'background_auto_end',
+          'logs': FieldValue.arrayUnion([
+            'background_auto_end at ${now.toIso8601String()}',
+          ]),
+        })
+        .timeout(const Duration(seconds: 15));
 
     // Clear from local storage
     final prefs = await SharedPreferences.getInstance();
@@ -370,7 +380,8 @@ Future<void> _autoEndSession(
     debugPrint('Auto-ended session $sessionId for $rollNumber');
 
     // Send notification about auto-end
-    final FlutterLocalNotificationsPlugin notifications = FlutterLocalNotificationsPlugin();
+    final FlutterLocalNotificationsPlugin notifications =
+        FlutterLocalNotificationsPlugin();
     await notifications.show(
       999,
       'Session Ended',
@@ -384,7 +395,6 @@ Future<void> _autoEndSession(
         ),
       ),
     );
-
   } catch (e) {
     debugPrint('Auto-end session error: $e');
   }
@@ -410,11 +420,7 @@ class FirebaseErrorApp extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
-                  Icons.error_outline,
-                  size: 80,
-                  color: Colors.red,
-                ),
+                Icon(Icons.error_outline, size: 80, color: Colors.red),
                 SizedBox(height: 20),
                 Text(
                   'Firebase Connection Error',
@@ -428,10 +434,7 @@ class FirebaseErrorApp extends StatelessWidget {
                 Text(
                   'Please check your internet connection and restart the app',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.grey,
-                  ),
+                  style: TextStyle(fontSize: 16, color: Colors.grey),
                 ),
               ],
             ),
@@ -461,40 +464,52 @@ class MyApp extends StatelessWidget {
       onGenerateRoute: (settings) {
         switch (settings.name) {
           case '/':
-            return MaterialPageRoute(builder: (context) => const SplashScreen());
+            return MaterialPageRoute(
+              builder: (context) => const SplashScreen(),
+            );
           case '/onboarding':
-            return MaterialPageRoute(builder: (context) => const OnboardingScreen());
+            return MaterialPageRoute(
+              builder: (context) => const OnboardingScreen(),
+            );
           case '/login':
             return MaterialPageRoute(builder: (context) => const LoginPage());
           case '/tickscreen':
             final args = settings.arguments as Map<String, dynamic>? ?? {};
             return MaterialPageRoute(
-              builder: (context) => TickAnimation(
-                message: 'Login Successful!',
-                arguments: args,
-              ),
+              builder:
+                  (context) => TickAnimation(
+                    message: 'Login Successful!',
+                    arguments: args,
+                  ),
+            );
+          case '/groupselection':
+            final args = settings.arguments as Map<String, dynamic>? ?? {};
+            return MaterialPageRoute(
+              builder: (context) => GroupSelectionScreen(studentData: args),
             );
           case '/admin':
             final args = settings.arguments as Map<String, dynamic>? ?? {};
             return MaterialPageRoute(
-              builder: (context) => AdminHomeScreen(
-                arguments: args,
-                userName: args['userName'] ?? 'Admin',
-                userEmail: args['userEmail'] ?? 'admin@gmail.com',
-              ),
+              builder:
+                  (context) => AdminHomeScreen(
+                    arguments: args,
+                    userName: args['userName'] ?? 'Admin',
+                    userEmail: args['userEmail'] ?? 'admin@gmail.com',
+                  ),
             );
           case '/students':
             final args = settings.arguments as Map<String, dynamic>? ?? {};
             return MaterialPageRoute(
-              builder: (context) => UserHomeScreen(
-                arguments: args,
-                userName: args['userName'] ?? 'Student',
-                userEmail: args['userEmail'] ?? 'student@gmail.com',
-                rollNumber: args['rollNumber'] ?? 'N/A',
-                groupId: args['groupId'] ?? '',
-                groupName: args['groupName'] ?? '',
-                department: args['department'] ?? '',
-              ),
+              builder:
+                  (context) => UserHomeScreen(
+                    arguments: args,
+                    userName: args['userName'] ?? 'Student',
+                    userEmail: args['userEmail'] ?? 'student@gmail.com',
+                    rollNumber: args['rollNumber'] ?? 'N/A',
+                    groupId: args['groupId'] ?? '',
+                    groupName: args['groupName'] ?? '',
+                    department: args['department'] ?? '',
+                  ),
             );
           default:
             return MaterialPageRoute(builder: (context) => const LoginPage());
@@ -1114,6 +1129,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     debugPrint("🔑 Login attempt:");
     debugPrint("➡️ loginValue: $loginValue");
     debugPrint("➡️ password: $password");
+    debugPrint("➡️ selectedRole: $selectedRole");
 
     setState(() => isLoading = true);
 
@@ -1125,8 +1141,10 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       debugPrint("📱 Is password phone number? $isPhoneLike");
 
       if (selectedRole == 'Admin') {
+        debugPrint("🔧 Attempting admin login...");
         await _loginAdmin(loginValue, password);
       } else {
+        debugPrint("👨‍🎓 Attempting student login...");
         // just send password, no extra args
         await _loginStudent(loginValue, password);
       }
@@ -1248,49 +1266,19 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         }
       }
 
-      // Fetch group info
-      String groupName = '';
-      if (data['groupId'] != null && data['groupId'].toString().isNotEmpty) {
-        try {
-          final groupDoc = await FirebaseFirestore.instance
-              .collection('groups')
-              .doc(data['groupId'])
-              .get()
-              .timeout(const Duration(seconds: 10));
-          if (groupDoc.exists) {
-            final groupData = groupDoc.data() as Map<String, dynamic>;
-            groupName = groupData['name'] ?? '';
-          }
-        } catch (e) {
-          debugPrint('Error fetching group info: $e');
-        }
-      }
-
-      // Save session
-      await SessionManager.saveSession(
-        isLoggedIn: true,
-        isAdmin: false,
-        userName: (data['name'] ?? '').toString(),
-        userEmail: (data['email'] ?? '').toString(),
-        rollNumber: (data['rollNumber'] ?? '').toString(),
-        groupId: (data['groupId'] ?? '').toString(),
-        groupName: groupName,
-        department: (data['department'] ?? '').toString(),
-      );
-
       if (!mounted) return;
 
-      // Navigate to TickScreen
+      debugPrint("✅ Student login successful for: ${data['name']}");
+      debugPrint("🎯 Navigating to group selection screen...");
+
+      // Navigate to Group Selection Screen for students to choose their group
       Navigator.pushNamed(
         context,
-        '/tickscreen',
+        '/groupselection',
         arguments: {
-          'isAdmin': false,
           'name': data['name'],
           'email': data['email'],
           'rollNumber': data['rollNumber'],
-          'groupId': data['groupId'],
-          'groupName': groupName,
           'department': data['department'],
         },
       );
