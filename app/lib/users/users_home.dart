@@ -342,7 +342,7 @@ class _UserHomeScreenState extends State<UserHomeScreen>
 
   Widget _buildHeaderSection() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 25),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,

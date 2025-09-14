@@ -126,7 +126,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
         return AddUsersScreen(groupData: {},);
       case 'Set Coordinates':
         return CoordinatesScreen();
-      case 'Search':
+      case 'Teachers':
         return SearchScreen();
       case 'Active Users':
         return ActiveUsersScreen();
@@ -293,7 +293,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
                                 ),
                                 _buildMenuItem(
                                   icon: Icons.search_outlined,
-                                  title: 'Search',
+                                  title: 'Teachers',
                                   isSelected: _currentSection == 'Search',
                                   onTap: () => _setCurrentSection('Search'),
                                 ),
