@@ -240,8 +240,9 @@ class _UserHomeScreenState extends State<UserHomeScreen>
 
   String _getGreeting() {
     final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good Morning';
-    else if (hour < 17) return 'Good Afternoon';
+    if (hour < 12) {
+      return 'Good Morning';
+    } else if (hour < 17) return 'Good Afternoon';
     else return 'Good Evening';
   }
 
@@ -552,7 +553,7 @@ class _UserHomeScreenState extends State<UserHomeScreen>
   }
 
   Widget _buildQuickStats() {
-    return Container(
+    return SizedBox(
       height: 100,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
