@@ -25,6 +25,7 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.random.Random
 
 class BiometricPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
@@ -137,7 +138,7 @@ class BiometricPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
     private fun captureFingerprint(instruction: String, timeoutSeconds: Int, result: Result) {
         val currentActivity = activity
         if (currentActivity == null) {
-            result.success(mapOf(
+            safeResultCallback(result, mapOf(
                 "success" to false,
                 "error" to "Activity not available for biometric authentication"
             ))
@@ -145,6 +146,9 @@ class BiometricPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
         }
 
         try {
+            // Use AtomicBoolean to ensure result is only called once
+            val resultCalled = AtomicBoolean(false)
+            
             val biometricPrompt = AndroidXBiometricPrompt(
                 currentActivity as androidx.fragment.app.FragmentActivity,
                 executor,
@@ -152,37 +156,42 @@ class BiometricPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
                     override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                         super.onAuthenticationError(errorCode, errString)
                         Log.e(TAG, "Authentication error: $errString")
-                        result.success(mapOf(
-                            "success" to false,
-                            "error" to "Authentication error: $errString"
-                        ))
+                        
+                        if (resultCalled.compareAndSet(false, true)) {
+                            safeResultCallback(result, mapOf(
+                                "success" to false,
+                                "error" to "Authentication error: $errString"
+                            ))
+                        }
                     }
 
                     override fun onAuthenticationSucceeded(authResult: AndroidXBiometricPrompt.AuthenticationResult) {
                         super.onAuthenticationSucceeded(authResult)
                         Log.d(TAG, "Authentication succeeded")
                         
-                        // Generate fingerprint template and data
-                        val fingerprintData = generateFingerprintData()
-                        val template = generateFingerprintTemplate(fingerprintData)
-                        val quality = generateQualityScore()
-                        
-                        result.success(mapOf(
-                            "success" to true,
-                            "fingerprintData" to fingerprintData,
-                            "template" to template,
-                            "quality" to quality,
-                            "error" to null
-                        ))
+                        if (resultCalled.compareAndSet(false, true)) {
+                            // Generate fingerprint template and data
+                            val fingerprintData = generateFingerprintData()
+                            val template = generateFingerprintTemplate(fingerprintData)
+                            val quality = generateQualityScore()
+                            
+                            safeResultCallback(result, mapOf(
+                                "success" to true,
+                                "fingerprintData" to fingerprintData,
+                                "template" to template,
+                                "quality" to quality,
+                                "error" to null
+                            ))
+                        }
                     }
 
                     override fun onAuthenticationFailed() {
                         super.onAuthenticationFailed()
                         Log.w(TAG, "Authentication failed")
-                        result.success(mapOf(
-                            "success" to false,
-                            "error" to "Fingerprint not recognized. Please try again."
-                        ))
+                        
+                        // Don't call result here for failed attempts - let user try again
+                        // Only call result.success on final error or success
+                        // The biometric prompt will handle retry logic
                     }
                 }
             )
@@ -199,7 +208,7 @@ class BiometricPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
 
         } catch (e: Exception) {
             Log.e(TAG, "Error capturing fingerprint: ${e.message}")
-            result.success(mapOf(
+            safeResultCallback(result, mapOf(
                 "success" to false,
                 "error" to "Error capturing fingerprint: ${e.message}"
             ))
@@ -216,7 +225,7 @@ class BiometricPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
             
             Log.d(TAG, "Template verification - Similarity: $similarity, Match: $isMatch")
             
-            result.success(mapOf(
+            safeResultCallback(result, mapOf(
                 "isMatch" to isMatch,
                 "confidence" to similarity,
                 "error" to null
@@ -224,11 +233,21 @@ class BiometricPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
             
         } catch (e: Exception) {
             Log.e(TAG, "Error verifying fingerprint: ${e.message}")
-            result.success(mapOf(
+            safeResultCallback(result, mapOf(
                 "isMatch" to false,
                 "confidence" to 0.0,
                 "error" to "Verification failed: ${e.message}"
             ))
+        }
+    }
+
+    private fun safeResultCallback(result: Result, data: Map<String, Any?>) {
+        try {
+            result.success(data)
+        } catch (e: IllegalStateException) {
+            Log.w(TAG, "Result already submitted: ${e.message}")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error calling result callback: ${e.message}")
         }
     }
 

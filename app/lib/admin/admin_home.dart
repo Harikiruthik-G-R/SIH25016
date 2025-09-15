@@ -12,6 +12,7 @@ import 'coordinates.dart';
 import 'search_screen.dart';
 import 'active_users.dart';
 import 'timetable_screen.dart';
+import 'teachers_screen.dart';
 
 class AdminHomeScreen extends StatefulWidget {
   final String userName;
@@ -20,7 +21,8 @@ class AdminHomeScreen extends StatefulWidget {
   const AdminHomeScreen({
     super.key,
     required this.userName,
-    required this.userEmail, required Map<String, dynamic> arguments,
+    required this.userEmail,
+    required Map<String, dynamic> arguments,
   });
 
   @override
@@ -122,18 +124,20 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
         return _buildDashboardContent();
       case 'Groups':
         return GroupsScreen();
-      case 'Schedules':   
-        return AddUsersScreen(groupData: {},);
+      case 'Schedules':
+        return AddUsersScreen(groupData: {});
       case 'Set Coordinates':
         return CoordinatesScreen();
-      case 'Search':
-        return SearchScreen();
+      case 'Teachers':
+        return TeachersScreen();
       case 'Active Users':
         return ActiveUsersScreen();
       case 'Statistics':
         return StatisticsScreen();
       case 'Timetable':
         return TimetableScreen();
+      case 'Search':
+        return SearchScreen();
       default:
         return _buildDashboardContent();
     }
@@ -292,6 +296,12 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
                                   onTap: () => _setCurrentSection('Timetable'),
                                 ),
                                 _buildMenuItem(
+                                  icon: Icons.school_outlined,
+                                  title: 'Teachers',
+                                  isSelected: _currentSection == 'Teachers',
+                                  onTap: () => _setCurrentSection('Teachers'),
+                                ),
+                                _buildMenuItem(
                                   icon: Icons.search_outlined,
                                   title: 'Search',
                                   isSelected: _currentSection == 'Search',
@@ -424,6 +434,12 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
                         title: 'Timetable',
                         isSelected: _currentSection == 'Timetable',
                         onTap: () => _setCurrentSection('Timetable'),
+                      ),
+                      _buildMenuItem(
+                        icon: Icons.school_outlined,
+                        title: 'Teachers',
+                        isSelected: _currentSection == 'Teachers',
+                        onTap: () => _setCurrentSection('Teachers'),
                       ),
                       _buildMenuItem(
                         icon: Icons.search_outlined,
@@ -709,7 +725,10 @@ class _ProfileDialogState extends State<ProfileDialog> {
       backgroundColor: Colors.transparent,
       child: SingleChildScrollView(
         child: Container(
-          width: MediaQuery.of(context).size.width > 600 ? 500 : MediaQuery.of(context).size.width * 0.9,
+          width:
+              MediaQuery.of(context).size.width > 600
+                  ? 500
+                  : MediaQuery.of(context).size.width * 0.9,
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
             color: Colors.white,
@@ -741,7 +760,10 @@ class _ProfileDialogState extends State<ProfileDialog> {
                     ),
                     const Spacer(),
                     IconButton(
-                      onPressed: _isUploading || _isSaving ? null : () => Navigator.pop(context),
+                      onPressed:
+                          _isUploading || _isSaving
+                              ? null
+                              : () => Navigator.pop(context),
                       icon: const Icon(Icons.close),
                     ),
                   ],
@@ -770,7 +792,8 @@ class _ProfileDialogState extends State<ProfileDialog> {
                       ),
                       const SizedBox(height: 10),
                       TextButton.icon(
-                        onPressed: _isUploading || _isSaving ? null : _pickImage,
+                        onPressed:
+                            _isUploading || _isSaving ? null : _pickImage,
                         icon: const Icon(Icons.camera_alt),
                         label: const Text('Change Photo'),
                         style: TextButton.styleFrom(
@@ -865,11 +888,17 @@ class _ProfileDialogState extends State<ProfileDialog> {
                   children: [
                     Expanded(
                       child: OutlinedButton(
-                        onPressed: _isUploading || _isSaving ? null : () => Navigator.pop(context),
+                        onPressed:
+                            _isUploading || _isSaving
+                                ? null
+                                : () => Navigator.pop(context),
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 15),
                           side: BorderSide(
-                            color: _isUploading || _isSaving ? Colors.grey : const Color(0xFF4CAF50),
+                            color:
+                                _isUploading || _isSaving
+                                    ? Colors.grey
+                                    : const Color(0xFF4CAF50),
                           ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
@@ -879,7 +908,10 @@ class _ProfileDialogState extends State<ProfileDialog> {
                           'Cancel',
                           style: TextStyle(
                             fontSize: 16,
-                            color: _isUploading || _isSaving ? Colors.grey : const Color(0xFF4CAF50),
+                            color:
+                                _isUploading || _isSaving
+                                    ? Colors.grey
+                                    : const Color(0xFF4CAF50),
                           ),
                         ),
                       ),
@@ -887,7 +919,8 @@ class _ProfileDialogState extends State<ProfileDialog> {
                     const SizedBox(width: 16),
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: (_isUploading || _isSaving) ? null : _saveProfile,
+                        onPressed:
+                            (_isUploading || _isSaving) ? null : _saveProfile,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF4CAF50),
                           padding: const EdgeInsets.symmetric(vertical: 15),
@@ -896,19 +929,23 @@ class _ProfileDialogState extends State<ProfileDialog> {
                           ),
                           elevation: 0,
                         ),
-                        child: _isSaving
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
+                        child:
+                            _isSaving
+                                ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                                : const Text(
+                                  'Save Profile',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    color: Colors.white,
+                                  ),
                                 ),
-                              )
-                            : const Text(
-                                'Save Profile',
-                                style: TextStyle(fontSize: 16, color: Colors.white),
-                              ),
                       ),
                     ),
                   ],
@@ -944,20 +981,21 @@ class _ProfileDialogState extends State<ProfileDialog> {
           width: 120,
           height: 120,
           fit: BoxFit.cover,
-          placeholder: (context, url) => Container(
-            width: 120,
-            height: 120,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.grey.shade200,
-            ),
-            child: const Center(
-              child: CircularProgressIndicator(
-                color: Color(0xFF4CAF50),
-                strokeWidth: 2,
+          placeholder:
+              (context, url) => Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.grey.shade200,
+                ),
+                child: const Center(
+                  child: CircularProgressIndicator(
+                    color: Color(0xFF4CAF50),
+                    strokeWidth: 2,
+                  ),
+                ),
               ),
-            ),
-          ),
           errorWidget: (context, url, error) {
             debugPrint('Error loading network image: $error');
             return _buildDefaultAvatar();
@@ -977,11 +1015,7 @@ class _ProfileDialogState extends State<ProfileDialog> {
         shape: BoxShape.circle,
         color: const Color(0xFF4CAF50).withOpacity(0.1),
       ),
-      child: const Icon(
-        Icons.camera_alt, 
-        size: 40, 
-        color: Color(0xFF4CAF50),
-      ),
+      child: const Icon(Icons.camera_alt, size: 40, color: Color(0xFF4CAF50)),
     );
   }
 
@@ -998,8 +1032,9 @@ class _ProfileDialogState extends State<ProfileDialog> {
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(
-          icon, 
-          color: _isUploading || _isSaving ? Colors.grey : const Color(0xFF4CAF50),
+          icon,
+          color:
+              _isUploading || _isSaving ? Colors.grey : const Color(0xFF4CAF50),
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -1079,7 +1114,8 @@ class _ProfileDialogState extends State<ProfileDialog> {
     });
 
     try {
-      final String fileName = 'profile_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final String fileName =
+          'profile_${DateTime.now().millisecondsSinceEpoch}.jpg';
       final Reference storageRef = FirebaseStorage.instance
           .ref()
           .child('profile_images')
