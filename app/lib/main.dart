@@ -1143,7 +1143,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         debugPrint("🔧 Attempting admin login...");
         await _loginAdmin(loginValue, password);
       } else {
-        debugPrint("👨‍🎓 Attempting student login...");
+        debugPrint("👨‍� Attempting student login...");
         // just send password, no extra args
         await _loginStudent(loginValue, password);
       }
