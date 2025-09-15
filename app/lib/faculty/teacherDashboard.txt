@@ -1,0 +1,31 @@
+In this login page add a teacher role use password field in the teachers collection which added by admin like assigning subjects  for their password 
+and goes to teacherDashboard.dart in this by their subject name the they view the attendence of the students if their subject name in the timetable collection 
+example if Theory of Computation is in the timetable of a group then a card should be created in the group name in those the data from the sessions collection in the  student_checkins collection has a subject name if those matchs show that students record 
+
+
+Teacher Login (New Role)
+
+Add a Teacher role in login page (alongside Admin, HOD, etc.).
+
+Teachers are added by Admin in the teachers collection.
+
+Each teacher document has a password field (set by Admin, similar to assigning subjects).
+
+Teachers log in using:
+
+Email (from teachers collection)
+
+Password (from teachers collection)
+
+⚡ Note: This is custom authentication (not Firebase Auth), since passwords are stored in Firestore.
+
+eacher logs in with email + password from teachers collection.
+
+Dashboard loads → fetch teacher’s subjects[] array.
+
+For each subject → check timetable collection for groups where subject exists.
+
+For each matching group → create a card.
+
+Inside the card → show student check-ins from sessions → student_checkins filtered by subject name.
+
