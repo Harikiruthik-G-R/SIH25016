@@ -1079,12 +1079,153 @@ Future<geo.Position?> _safePosition() async {
 }
 
 // Update the method signature in _firstBoundsContaining if needed
-_BoundsBox? _firstBoundsContaining(double lat, double lng) {
-  for (final b in _allowedBounds) {
-    if (b.contains(lat, lng)) return b;
+static const double OUTER_BOX_OFFSET_METERS = 10.0; // Expand inner box by 10m
+static const double CENTER_PROXIMITY_THRESHOLD_METERS = 5.0; // Allow check-in if within 5m of center
+static const double METERS_TO_DEGREES_LAT = 0.000009; // Approx conversion: 1m ≈ 0.000009° latitude
+static const double METERS_TO_DEGREES_LNG = 0.000009; // Simplified - actual depends on latitude
+
+/// Enhanced bounds validation with dual bounding-box system
+_BoundsValidationResult? _validateLocationWithDualGeofence(double userLat, double userLng) {
+  for (final bounds in _allowedBounds) {
+    final result = _checkDualBoundingBox(bounds, userLat, userLng);
+    if (result.isAllowed) {
+      return result;
+    }
   }
+  return null; // No bounds allow this location
+}
+
+/// Check user location against dual bounding-box system for a single bounds
+_BoundsValidationResult _checkDualBoundingBox(_BoundsBox bounds, double userLat, double userLng) {
+  // Step 1: Check inner rectangle (original bounds)
+  if (_isInsideRectangle(bounds, userLat, userLng)) {
+    _log("Inside inner box ✅ - Location: ($userLat, $userLng)");
+    return _BoundsValidationResult(
+      isAllowed: true,
+      bounds: bounds,
+      zone: 'inner',
+      reason: 'Inside inner rectangle',
+    );
+  }
+
+  // Step 2: Create outer rectangle by expanding inner bounds
+  final outerBounds = _createOuterBounds(bounds);
+  
+  // Step 3: Check if inside outer rectangle
+  if (_isInsideRectangle(outerBounds, userLat, userLng)) {
+    // Step 4: Calculate distance to inner rectangle center
+    final innerCenter = _getRectangleCenter(bounds);
+    final distanceToCenter = _calculateDistance(userLat, userLng, innerCenter.lat, innerCenter.lng);
+    
+    _log("Inside outer box - Distance to center: ${distanceToCenter.toStringAsFixed(2)}m");
+    
+    if (distanceToCenter <= CENTER_PROXIMITY_THRESHOLD_METERS) {
+      _log("Inside outer box but near center ✅ - Distance: ${distanceToCenter.toStringAsFixed(1)}m");
+      return _BoundsValidationResult(
+        isAllowed: true,
+        bounds: bounds,
+        zone: 'outer_near',
+        reason: 'Near center of inner rectangle (${distanceToCenter.toStringAsFixed(1)}m)',
+      );
+    } else {
+      _log("Inside outer box but far ❌ - Distance: ${distanceToCenter.toStringAsFixed(1)}m > ${CENTER_PROXIMITY_THRESHOLD_METERS}m");
+      return _BoundsValidationResult(
+        isAllowed: false,
+        bounds: bounds,
+        zone: 'outer_far',
+        reason: 'Too far from center (${distanceToCenter.toStringAsFixed(1)}m)',
+      );
+    }
+  }
+  
+  _log("Outside outer box ❌ - Location: ($userLat, $userLng)");
+  return _BoundsValidationResult(
+    isAllowed: false,
+    bounds: bounds,
+    zone: 'outside',
+    reason: 'Outside geofence area',
+  );
+}
+
+/// Check if coordinates are inside a rectangle
+bool _isInsideRectangle(_BoundsBox bounds, double lat, double lng) {
+  final minLat = bounds.bottomRightLat;  // bottom-right has smaller latitude
+  final maxLat = bounds.topLeftLat;      // top-left has larger latitude
+  final minLng = bounds.topLeftLng;      // top-left has smaller longitude
+  final maxLng = bounds.bottomRightLng;  // bottom-right has larger longitude
+  
+  return lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng;
+}
+
+/// Create outer bounds by expanding inner bounds by specified meters
+_BoundsBox _createOuterBounds(_BoundsBox innerBounds) {
+  // Convert meter offset to degree offset
+  final latOffset = OUTER_BOX_OFFSET_METERS * METERS_TO_DEGREES_LAT;
+  final lngOffset = OUTER_BOX_OFFSET_METERS * METERS_TO_DEGREES_LNG;
+  
+  // Expand bounds in all directions
+  final outerTopLeftLat = innerBounds.topLeftLat + latOffset;      // Move north
+  final outerTopLeftLng = innerBounds.topLeftLng - lngOffset;      // Move west
+  final outerBottomRightLat = innerBounds.bottomRightLat - latOffset; // Move south
+  final outerBottomRightLng = innerBounds.bottomRightLng + lngOffset; // Move east
+  
+  return _BoundsBox(
+    topLeftLat: outerTopLeftLat,
+    topLeftLng: outerTopLeftLng,
+    bottomRightLat: outerBottomRightLat,
+    bottomRightLng: outerBottomRightLng,
+    campusName: '${innerBounds.campusName}_outer',
+    timetableId: innerBounds.timetableId,
+  );
+}
+
+/// Get center point of a rectangle
+({double lat, double lng}) _getRectangleCenter(_BoundsBox bounds) {
+  final centerLat = (bounds.topLeftLat + bounds.bottomRightLat) / 2;
+  final centerLng = (bounds.topLeftLng + bounds.bottomRightLng) / 2;
+  return (lat: centerLat, lng: centerLng);
+}
+
+/// Calculate distance between two coordinates using Haversine formula
+double _calculateDistance(double lat1, double lng1, double lat2, double lng2) {
+  const double earthRadius = 6371000; // Earth's radius in meters
+  
+  final dLat = _degreesToRadians(lat2 - lat1);
+  final dLng = _degreesToRadians(lng2 - lng1);
+  
+  final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+      math.cos(_degreesToRadians(lat1)) * math.cos(_degreesToRadians(lat2)) *
+      math.sin(dLng / 2) * math.sin(dLng / 2);
+  
+  final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+  
+  return earthRadius * c;
+}
+
+double _degreesToRadians(double degrees) {
+  return degrees * (math.pi / 180);
+}
+
+// Replace the existing _firstBoundsContaining method with this
+_BoundsBox? _firstBoundsContaining(double lat, double lng) {
+  final result = _validateLocationWithDualGeofence(lat, lng);
+  if (result != null && result.isAllowed) {
+    _log("Location validation: ${result.reason} (Zone: ${result.zone})");
+    return result.bounds;
+  }
+  
+  // Log why location was rejected
+  if (result != null) {
+    _log("Location rejected: ${result.reason} (Zone: ${result.zone})");
+  } else {
+    _log("Location rejected: No matching geofence found");
+  }
+  
   return null;
 }
+
+/// Result class for bounds validation
+
   Future<bool?> _confirm({
     required String title,
     required String message,
@@ -2070,4 +2211,17 @@ class _BoundsBox {
     final maxLng = bottomRightLng;
     return lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng;
   }
+}
+class _BoundsValidationResult {
+  final bool isAllowed;
+  final _BoundsBox bounds;
+  final String zone; // 'inner', 'outer_near', 'outer_far', 'outside'
+  final String reason;
+  
+  const _BoundsValidationResult({
+    required this.isAllowed,
+    required this.bounds,
+    required this.zone,
+    required this.reason,
+  });
 }
