@@ -181,207 +181,264 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-    backgroundColor: Colors.grey[50],
-    appBar: AppBar(
-      elevation: 0,
-      backgroundColor: const Color(0xFF1B5E20),
-      foregroundColor: Colors.white,
-      title: Row(
-        children: [
-          Container(
-            padding: EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(Icons.dashboard_outlined, size: 20),
-          ),
-          SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Teacher Dashboard',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  'Welcome back',
-                  style: TextStyle(fontSize: 11, color: Colors.white70),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-      actions: [
-        Container(
-          margin: EdgeInsets.only(right: 4),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.15),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: IconButton(
-            padding: EdgeInsets.all(8),
-            constraints: BoxConstraints(minWidth: 40, minHeight: 40),
-            icon: Icon(Icons.refresh, color: Colors.white, size: 20),
-            onPressed: _loadTeacherData,
-          ),
-        ),
-        Container(
-          margin: EdgeInsets.only(right: 8),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.15),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: PopupMenuButton<String>(
-            padding: EdgeInsets.all(8),
-            constraints: BoxConstraints(minWidth: 40, minHeight: 40),
-            icon: Icon(Icons.account_circle, color: Colors.white, size: 20),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            onSelected: (value) async {
-              if (value == 'logout') {
-                await SessionManager.clearSession();
-                if (mounted) {
-                  Navigator.pushNamedAndRemoveUntil(
-                    context,
-                    '/',
-                    (route) => false,
-                  );
-                }
-              }
-            },
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                value: 'logout',
-                child: Row(
-                  children: [
-                    Icon(Icons.logout, color: Color(0xFFD32F2F), size: 20),
-                    SizedBox(width: 12),
-                    Text('Logout'),
-                  ],
-                ),
+      backgroundColor: Colors.grey[50],
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: const Color(0xFF1B5E20),
+        foregroundColor: Colors.white,
+        title: Row(
+          children: [
+            Container(
+              padding: EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(10),
               ),
-            ],
-          ),
-        ),
-      ],
-    ),
-    body: _isLoading
-        ? Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Colors.grey[50]!, Colors.white],
-              ),
+              child: Icon(Icons.dashboard_outlined, size: 20),
             ),
-            child: Center(
+            SizedBox(width: 8),
+            Expanded(
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 20,
-                          offset: Offset(0, 10),
-                        ),
-                      ],
-                    ),
-                    child: CircularProgressIndicator(
-                      color: Color(0xFF1B5E20),
-                      strokeWidth: 3,
-                    ),
-                  ),
-                  SizedBox(height: 24),
                   Text(
-                    'Loading dashboard...',
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                    ),
+                    'Teacher Dashboard',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    'Welcome back',
+                    style: TextStyle(fontSize: 11, color: Colors.white70),
                   ),
                 ],
               ),
             ),
-          )
-        : SingleChildScrollView(
-            padding: EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Enhanced Welcome Card
-                Container(
-                  margin: EdgeInsets.only(bottom: 32),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [Color(0xFF1B5E20), Color(0xFF2E7D32)],
+          ],
+        ),
+        actions: [
+          Container(
+            margin: EdgeInsets.only(right: 4),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: IconButton(
+              padding: EdgeInsets.all(8),
+              constraints: BoxConstraints(minWidth: 40, minHeight: 40),
+              icon: Icon(Icons.refresh, color: Colors.white, size: 20),
+              onPressed: _loadTeacherData,
+            ),
+          ),
+          Container(
+            margin: EdgeInsets.only(right: 8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: PopupMenuButton<String>(
+              padding: EdgeInsets.all(8),
+              constraints: BoxConstraints(minWidth: 40, minHeight: 40),
+              icon: Icon(Icons.account_circle, color: Colors.white, size: 20),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              onSelected: (value) async {
+                if (value == 'logout') {
+                  await SessionManager.clearSession();
+                  if (mounted) {
+                    Navigator.pushNamedAndRemoveUntil(
+                      context,
+                      '/',
+                      (route) => false,
+                    );
+                  }
+                }
+              },
+              itemBuilder:
+                  (context) => [
+                    PopupMenuItem(
+                      value: 'logout',
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.logout,
+                            color: Color(0xFFD32F2F),
+                            size: 20,
+                          ),
+                          SizedBox(width: 12),
+                          Text('Logout'),
+                        ],
+                      ),
                     ),
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Color(0xFF1B5E20).withOpacity(0.3),
-                        blurRadius: 20,
-                        offset: Offset(0, 12),
+                  ],
+            ),
+          ),
+        ],
+      ),
+      body:
+          _isLoading
+              ? Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.grey[50]!, Colors.white],
+                  ),
+                ),
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 20,
+                              offset: Offset(0, 10),
+                            ),
+                          ],
+                        ),
+                        child: CircularProgressIndicator(
+                          color: Color(0xFF1B5E20),
+                          strokeWidth: 3,
+                        ),
+                      ),
+                      SizedBox(height: 24),
+                      Text(
+                        'Loading dashboard...',
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ],
                   ),
-                  child: Padding(
-                    padding: EdgeInsets.all(28),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
+                ),
+              )
+              : SingleChildScrollView(
+                padding: EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Enhanced Welcome Card
+                    Container(
+                      margin: EdgeInsets.only(bottom: 32),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [Color(0xFF1B5E20), Color(0xFF2E7D32)],
+                        ),
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Color(0xFF1B5E20).withOpacity(0.3),
+                            blurRadius: 20,
+                            offset: Offset(0, 12),
+                          ),
+                        ],
+                      ),
+                      child: Padding(
+                        padding: EdgeInsets.all(28),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Container(
-                              width: 64,
-                              height: 64,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(20),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.1),
-                                    blurRadius: 8,
-                                    offset: Offset(0, 4),
+                            Row(
+                              children: [
+                                Container(
+                                  width: 64,
+                                  height: 64,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(20),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.1),
+                                        blurRadius: 8,
+                                        offset: Offset(0, 4),
+                                      ),
+                                    ],
                                   ),
-                                ],
-                              ),
-                              child: Icon(
-                                Icons.person,
-                                color: Colors.white,
-                                size: 32,
-                              ),
+                                  child: Icon(
+                                    Icons.person,
+                                    color: Colors.white,
+                                    size: 32,
+                                  ),
+                                ),
+                                SizedBox(width: 20),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Welcome back,',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          color: Colors.white.withOpacity(0.9),
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      SizedBox(height: 4),
+                                      Text(
+                                        widget.teacherName,
+                                        style: TextStyle(
+                                          fontSize: 26,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
-                            SizedBox(width: 20),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                            SizedBox(height: 20),
+                            Container(
+                              padding: EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: Colors.white.withOpacity(0.2),
+                                ),
+                              ),
+                              child: Row(
                                 children: [
-                                  Text(
-                                    'Welcome back,',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      color: Colors.white.withOpacity(0.9),
-                                      fontWeight: FontWeight.w500,
+                                  Expanded(
+                                    child: _buildWelcomeInfoItem(
+                                      Icons.work_outline,
+                                      'Position',
+                                      widget.designation,
                                     ),
                                   ),
-                                  SizedBox(height: 4),
-                                  Text(
-                                    widget.teacherName,
-                                    style: TextStyle(
-                                      fontSize: 26,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
+                                  Container(
+                                    width: 1,
+                                    height: 40,
+                                    color: Colors.white.withOpacity(0.3),
+                                  ),
+                                  Expanded(
+                                    child: _buildWelcomeInfoItem(
+                                      Icons.business,
+                                      'Department',
+                                      widget.department,
+                                    ),
+                                  ),
+                                  Container(
+                                    width: 1,
+                                    height: 40,
+                                    color: Colors.white.withOpacity(0.3),
+                                  ),
+                                  Expanded(
+                                    child: _buildWelcomeInfoItem(
+                                      Icons.email_outlined,
+                                      'Email',
+                                      widget.teacherEmail.split('@')[0],
                                     ),
                                   ),
                                 ],
@@ -389,527 +446,511 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                             ),
                           ],
                         ),
-                        SizedBox(height: 20),
-                        Container(
-                          padding: EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.2),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: _buildWelcomeInfoItem(
-                                  Icons.work_outline,
-                                  'Position',
-                                  widget.designation,
-                                ),
-                              ),
-                              Container(
-                                width: 1,
-                                height: 40,
-                                color: Colors.white.withOpacity(0.3),
-                              ),
-                              Expanded(
-                                child: _buildWelcomeInfoItem(
-                                  Icons.business,
-                                  'Department',
-                                  widget.department,
-                                ),
-                              ),
-                              Container(
-                                width: 1,
-                                height: 40,
-                                color: Colors.white.withOpacity(0.3),
-                              ),
-                              Expanded(
-                                child: _buildWelcomeInfoItem(
-                                  Icons.email_outlined,
-                                  'Email',
-                                  widget.teacherEmail.split('@')[0],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
-                ),
 
-                // Enhanced Groups Section
-                if (_subjectGroups.isNotEmpty) ...[
-                  Row(
-                    children: [
-                      Container(
-                        padding: EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [Color(0xFF1976D2), Color(0xFF1565C0)],
-                          ),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(Icons.groups, color: Colors.white, size: 24),
-                      ),
-                      SizedBox(width: 16),
-                      Text(
-                        'Your Classes',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF1B5E20),
-                        ),
-                      ),
-                      Spacer(),
-                      Container(
-                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Color(0xFF1976D2).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          '${_getUniqueGroups().length} groups',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Color(0xFF1976D2),
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 20),
-                  SizedBox(
-                    height: 160,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: _getUniqueGroups().length,
-                      itemBuilder: (context, index) {
-                        final group = _getUniqueGroups()[index];
-                        final subjectsInGroup = _getSubjectsForGroup(
-                          group['groupId'],
-                        );
-
-                        return Container(
-                          width: 260,
-                          margin: EdgeInsets.only(right: 16),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [Colors.white, Colors.grey[50]!],
-                            ),
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.08),
-                                blurRadius: 15,
-                                offset: Offset(0, 4),
+                    // Enhanced Groups Section
+                    if (_subjectGroups.isNotEmpty) ...[
+                      Row(
+                        children: [
+                          Container(
+                            padding: EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [Color(0xFF1976D2), Color(0xFF1565C0)],
                               ),
-                            ],
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(
+                              Icons.groups,
+                              color: Colors.white,
+                              size: 24,
+                            ),
                           ),
-                          child: Padding(
-                            padding: EdgeInsets.all(20),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
+                          SizedBox(width: 16),
+                          Text(
+                            'Your Classes',
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1B5E20),
+                            ),
+                          ),
+                          Spacer(),
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Color(0xFF1976D2).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              '${_getUniqueGroups().length} groups',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Color(0xFF1976D2),
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 20),
+                      SizedBox(
+                        height: 160,
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: _getUniqueGroups().length,
+                          itemBuilder: (context, index) {
+                            final group = _getUniqueGroups()[index];
+                            final subjectsInGroup = _getSubjectsForGroup(
+                              group['groupId'],
+                            );
+
+                            return Container(
+                              width: 260,
+                              margin: EdgeInsets.only(right: 16),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [Colors.white, Colors.grey[50]!],
+                                ),
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.08),
+                                    blurRadius: 15,
+                                    offset: Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: Padding(
+                                padding: EdgeInsets.all(20),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Container(
-                                      padding: EdgeInsets.all(8),
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          colors: [Color(0xFF1976D2), Color(0xFF1565C0)],
-                                        ),
-                                        borderRadius: BorderRadius.circular(12),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Color(0xFF1976D2).withOpacity(0.3),
-                                            blurRadius: 8,
-                                            offset: Offset(0, 4),
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: EdgeInsets.all(8),
+                                          decoration: BoxDecoration(
+                                            gradient: LinearGradient(
+                                              colors: [
+                                                Color(0xFF1976D2),
+                                                Color(0xFF1565C0),
+                                              ],
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Color(
+                                                  0xFF1976D2,
+                                                ).withOpacity(0.3),
+                                                blurRadius: 8,
+                                                offset: Offset(0, 4),
+                                              ),
+                                            ],
                                           ),
-                                        ],
+                                          child: Icon(
+                                            Icons.class_,
+                                            color: Colors.white,
+                                            size: 20,
+                                          ),
+                                        ),
+                                        SizedBox(width: 12),
+                                        Expanded(
+                                          child: Text(
+                                            group['groupName'],
+                                            style: TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.grey[800],
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    SizedBox(height: 12),
+                                    Container(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 6,
                                       ),
-                                      child: Icon(
-                                        Icons.class_,
-                                        color: Colors.white,
-                                        size: 20,
+                                      decoration: BoxDecoration(
+                                        color: Color(
+                                          0xFF1976D2,
+                                        ).withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        '${subjectsInGroup.length} subjects',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: Color(0xFF1976D2),
+                                          fontWeight: FontWeight.w600,
+                                        ),
                                       ),
                                     ),
-                                    SizedBox(width: 12),
+                                    SizedBox(height: 8),
                                     Expanded(
                                       child: Text(
-                                        group['groupName'],
+                                        subjectsInGroup.take(2).join(', ') +
+                                            (subjectsInGroup.length > 2
+                                                ? '...'
+                                                : ''),
                                         style: TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.grey[800],
+                                          fontSize: 14,
+                                          color: Colors.grey[600],
+                                          height: 1.4,
                                         ),
-                                        maxLines: 1,
+                                        maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
                                   ],
                                 ),
-                                SizedBox(height: 12),
-                                Container(
-                                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: Color(0xFF1976D2).withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    '${subjectsInGroup.length} subjects',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: Color(0xFF1976D2),
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                                SizedBox(height: 8),
-                                Expanded(
-                                  child: Text(
-                                    subjectsInGroup.take(2).join(', ') +
-                                        (subjectsInGroup.length > 2 ? '...' : ''),
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: Colors.grey[600],
-                                      height: 1.4,
-                                    ),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      SizedBox(height: 32),
+                    ],
+
+                    // Enhanced Subjects Section
+                    Row(
+                      children: [
+                        Container(
+                          padding: EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Color(0xFF1B5E20), Color(0xFF2E7D32)],
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            Icons.book,
+                            color: Colors.white,
+                            size: 24,
+                          ),
+                        ),
+                        SizedBox(width: 16),
+                        Text(
+                          'Your Subjects',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1B5E20),
+                          ),
+                        ),
+                        Spacer(),
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Color(0xFF1B5E20).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            '${widget.subjects.length} subjects',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Color(0xFF1B5E20),
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
-                        );
-                      },
+                        ),
+                      ],
                     ),
-                  ),
-                  SizedBox(height: 32),
-                ],
+                    SizedBox(height: 20),
 
-                // Enhanced Subjects Section
+                    // Enhanced Subjects Grid
+                    widget.subjects.isEmpty
+                        ? _buildEnhancedEmptyState()
+                        : GridView.builder(
+                          shrinkWrap: true,
+                          physics: NeverScrollableScrollPhysics(),
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 2,
+                                childAspectRatio: 1.2,
+                                crossAxisSpacing: 12,
+                                mainAxisSpacing: 12,
+                              ),
+                          itemCount: widget.subjects.length,
+                          itemBuilder: (context, index) {
+                            final subject = widget.subjects[index];
+                            final attendanceCount =
+                                _todaysAttendance[subject] ?? 0;
+                            final groupCount =
+                                _subjectGroups[subject]?.length ?? 0;
+
+                            return _buildEnhancedSubjectCard(
+                              subject,
+                              attendanceCount,
+                              groupCount,
+                            );
+                          },
+                        ),
+                  ],
+                ),
+              ),
+    );
+  }
+
+  Widget _buildWelcomeInfoItem(IconData icon, String label, String value) {
+    return Column(
+      children: [
+        Icon(icon, color: Colors.white, size: 20),
+        SizedBox(height: 6),
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.white70,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+          ),
+          textAlign: TextAlign.center,
+          overflow: TextOverflow.ellipsis,
+          maxLines: 1,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEnhancedSubjectCard(
+    String subject,
+    int attendanceCount,
+    int groupCount,
+  ) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.white, Colors.grey[50]!],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 15,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _navigateToSubjectAttendance(subject),
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 Row(
                   children: [
                     Container(
-                      padding: EdgeInsets.all(10),
+                      padding: EdgeInsets.all(8),
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: [Color(0xFF1B5E20), Color(0xFF2E7D32)],
                         ),
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Color(0xFF1B5E20).withOpacity(0.3),
+                            blurRadius: 6,
+                            offset: Offset(0, 3),
+                          ),
+                        ],
                       ),
-                      child: Icon(Icons.book, color: Colors.white, size: 24),
+                      child: Icon(Icons.subject, color: Colors.white, size: 18),
                     ),
-                    SizedBox(width: 16),
-                    Text(
-                      'Your Subjects',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF1B5E20),
-                      ),
-                    ),
-                    Spacer(),
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Color(0xFF1B5E20).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
+                    SizedBox(width: 10),
+                    Expanded(
                       child: Text(
-                        '${widget.subjects.length} subjects',
+                        subject,
                         style: TextStyle(
-                          fontSize: 14,
-                          color: Color(0xFF1B5E20),
+                          fontSize: 15,
                           fontWeight: FontWeight.bold,
+                          color: Color(0xFF1B5E20),
                         ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
                 ),
-                SizedBox(height: 20),
-
-                // Enhanced Subjects Grid
-                widget.subjects.isEmpty
-                    ? _buildEnhancedEmptyState()
-                    : GridView.builder(
-                        shrinkWrap: true,
-                        physics: NeverScrollableScrollPhysics(),
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          childAspectRatio: 1.2,
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 12,
-                        ),
-                        itemCount: widget.subjects.length,
-                        itemBuilder: (context, index) {
-                          final subject = widget.subjects[index];
-                          final attendanceCount = _todaysAttendance[subject] ?? 0;
-                          final groupCount = _subjectGroups[subject]?.length ?? 0;
-
-                          return _buildEnhancedSubjectCard(
-                            subject,
-                            attendanceCount,
-                            groupCount,
-                          );
-                        },
+                Spacer(),
+                Container(
+                  padding: EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[50],
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.today, size: 14, color: Colors.grey[600]),
+                          SizedBox(width: 4),
+                          Text(
+                            'Today\'s Attendance',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey[600],
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
                       ),
+                      SizedBox(height: 4),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              '$attendanceCount students',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF1B5E20),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Color(0xFF1976D2).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              '$groupCount groups',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Color(0xFF1976D2),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
-  );
-}
+        ),
+      ),
+    );
+  }
 
-Widget _buildWelcomeInfoItem(IconData icon, String label, String value) {
-  return Column(
-    children: [
-      Icon(icon, color: Colors.white, size: 20),
-      SizedBox(height: 6),
-      Text(
-        label,
-        style: TextStyle(
-          color: Colors.white70,
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-      SizedBox(height: 4),
-      Text(
-        value,
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: 14,
-          fontWeight: FontWeight.bold,
-        ),
-        textAlign: TextAlign.center,
-        overflow: TextOverflow.ellipsis,
-        maxLines: 1,
-      ),
-    ],
-  );
-}
-
-Widget _buildEnhancedSubjectCard(String subject, int attendanceCount, int groupCount) {
-  return Container(
-    decoration: BoxDecoration(
-      gradient: LinearGradient(
-        colors: [Colors.white, Colors.grey[50]!],
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-      ),
-      borderRadius: BorderRadius.circular(20),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.08),
-          blurRadius: 15,
-          offset: Offset(0, 4),
-        ),
-      ],
-    ),
-    child: Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => _navigateToSubjectAttendance(subject),
+  Widget _buildEnhancedEmptyState() {
+    return Container(
+      height: 300,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: [Colors.white, Colors.grey[50]!]),
         borderRadius: BorderRadius.circular(20),
-        child: Padding(
-          padding: EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 15,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.grey[100]!, Colors.grey[200]!],
+                ),
+                borderRadius: BorderRadius.circular(32),
+              ),
+              child: Icon(
+                Icons.school_outlined,
+                size: 64,
+                color: Colors.grey[500],
+              ),
+            ),
+            SizedBox(height: 24),
+            Text(
+              'No subjects assigned',
+              style: TextStyle(
+                fontSize: 20,
+                color: Colors.grey[700],
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            SizedBox(height: 12),
+            Text(
+              'Contact your administrator to get\nsubjects assigned to your account',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey[500],
+                height: 1.4,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 24),
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF1B5E20), Color(0xFF2E7D32)],
+                ),
+                borderRadius: BorderRadius.circular(25),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
-                    padding: EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Color(0xFF1B5E20), Color(0xFF2E7D32)],
-                      ),
-                      borderRadius: BorderRadius.circular(10),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Color(0xFF1B5E20).withOpacity(0.3),
-                          blurRadius: 6,
-                          offset: Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: Icon(
-                      Icons.subject,
+                  Icon(Icons.refresh, color: Colors.white, size: 20),
+                  SizedBox(width: 8),
+                  Text(
+                    'Refresh Dashboard',
+                    style: TextStyle(
                       color: Colors.white,
-                      size: 18,
-                    ),
-                  ),
-                  SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      subject,
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF1B5E20),
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
               ),
-              Spacer(),
-              Container(
-                padding: EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.grey[50],
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.today, size: 14, color: Colors.grey[600]),
-                        SizedBox(width: 4),
-                        Text(
-                          'Today\'s Attendance',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.grey[600],
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 4),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            '$attendanceCount students',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF1B5E20),
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        Container(
-                          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: Color(0xFF1976D2).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            '$groupCount groups',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: Color(0xFF1976D2),
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
-    ),
-  );
-}
-
-Widget _buildEnhancedEmptyState() {
-  return Container(
-    height: 300,
-    decoration: BoxDecoration(
-      gradient: LinearGradient(
-        colors: [Colors.white, Colors.grey[50]!],
-      ),
-      borderRadius: BorderRadius.circular(20),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.05),
-          blurRadius: 15,
-          offset: Offset(0, 4),
-        ),
-      ],
-    ),
-    child: Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Colors.grey[100]!, Colors.grey[200]!],
-              ),
-              borderRadius: BorderRadius.circular(32),
-            ),
-            child: Icon(
-              Icons.school_outlined,
-              size: 64,
-              color: Colors.grey[500],
-            ),
-          ),
-          SizedBox(height: 24),
-          Text(
-            'No subjects assigned',
-            style: TextStyle(
-              fontSize: 20,
-              color: Colors.grey[700],
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          SizedBox(height: 12),
-          Text(
-            'Contact your administrator to get\nsubjects assigned to your account',
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.grey[500],
-              height: 1.4,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          SizedBox(height: 24),
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Color(0xFF1B5E20), Color(0xFF2E7D32)],
-              ),
-              borderRadius: BorderRadius.circular(25),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.refresh, color: Colors.white, size: 20),
-                SizedBox(width: 8),
-                Text(
-                  'Refresh Dashboard',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
-}
+    );
+  }
 }
 
 class SubjectAttendanceScreen extends StatefulWidget {
