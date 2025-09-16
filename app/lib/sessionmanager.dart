@@ -5,12 +5,16 @@ class SessionManager {
   // Keys for storing session data
   static const String _keyIsLoggedIn = 'isLoggedIn';
   static const String _keyIsAdmin = 'isAdmin';
+  static const String _keyIsTeacher = 'isTeacher';
   static const String _keyUserName = 'userName';
   static const String _keyUserEmail = 'userEmail';
   static const String _keyRollNumber = 'rollNumber';
   static const String _keyGroupId = 'groupId';
   static const String _keyGroupName = 'groupName';
   static const String _keyDepartment = 'department';
+  static const String _keyTeacherId = 'teacherId';
+  static const String _keyTeacherSubjects = 'teacherSubjects';
+  static const String _keyDesignation = 'designation';
   static const String _keyLoginTime = 'loginTime';
   static const String _keyLastActivity = 'lastActivity';
 
@@ -25,6 +29,10 @@ class SessionManager {
     String groupId = '',
     String groupName = '',
     String department = '',
+    bool isTeacher = false,
+    String teacherId = '',
+    List<String> teacherSubjects = const [],
+    String designation = '',
   }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -34,12 +42,16 @@ class SessionManager {
       await Future.wait([
         prefs.setBool(_keyIsLoggedIn, isLoggedIn),
         prefs.setBool(_keyIsAdmin, isAdmin),
+        prefs.setBool(_keyIsTeacher, isTeacher),
         prefs.setString(_keyUserName, userName),
         prefs.setString(_keyUserEmail, userEmail),
         prefs.setString(_keyRollNumber, rollNumber),
         prefs.setString(_keyGroupId, groupId),
         prefs.setString(_keyGroupName, groupName),
         prefs.setString(_keyDepartment, department),
+        prefs.setString(_keyTeacherId, teacherId),
+        prefs.setStringList(_keyTeacherSubjects, teacherSubjects),
+        prefs.setString(_keyDesignation, designation),
         prefs.setString(_keyLoginTime, currentTime),
         prefs.setString(_keyLastActivity, currentTime),
       ]);
@@ -60,12 +72,16 @@ class SessionManager {
       final sessionData = {
         'isLoggedIn': prefs.getBool(_keyIsLoggedIn) ?? false,
         'isAdmin': prefs.getBool(_keyIsAdmin) ?? false,
+        'isTeacher': prefs.getBool(_keyIsTeacher) ?? false,
         'userName': prefs.getString(_keyUserName) ?? '',
         'userEmail': prefs.getString(_keyUserEmail) ?? '',
         'rollNumber': prefs.getString(_keyRollNumber) ?? '',
         'groupId': prefs.getString(_keyGroupId) ?? '',
         'groupName': prefs.getString(_keyGroupName) ?? '',
         'department': prefs.getString(_keyDepartment) ?? '',
+        'teacherId': prefs.getString(_keyTeacherId) ?? '',
+        'teacherSubjects': prefs.getStringList(_keyTeacherSubjects) ?? [],
+        'designation': prefs.getString(_keyDesignation) ?? '',
         'loginTime': prefs.getString(_keyLoginTime) ?? '',
         'lastActivity': prefs.getString(_keyLastActivity) ?? '',
       };
@@ -85,12 +101,16 @@ class SessionManager {
     return {
       'isLoggedIn': false,
       'isAdmin': false,
+      'isTeacher': false,
       'userName': '',
       'userEmail': '',
       'rollNumber': '',
       'groupId': '',
       'groupName': '',
       'department': '',
+      'teacherId': '',
+      'teacherSubjects': <String>[],
+      'designation': '',
       'loginTime': '',
       'lastActivity': '',
     };
@@ -106,12 +126,16 @@ class SessionManager {
       await Future.wait([
         prefs.remove(_keyIsLoggedIn),
         prefs.remove(_keyIsAdmin),
+        prefs.remove(_keyIsTeacher),
         prefs.remove(_keyUserName),
         prefs.remove(_keyUserEmail),
         prefs.remove(_keyRollNumber),
         prefs.remove(_keyGroupId),
         prefs.remove(_keyGroupName),
         prefs.remove(_keyDepartment),
+        prefs.remove(_keyTeacherId),
+        prefs.remove(_keyTeacherSubjects),
+        prefs.remove(_keyDesignation),
         prefs.remove(_keyLoginTime),
         prefs.remove(_keyLastActivity),
       ]);
@@ -158,6 +182,17 @@ class SessionManager {
       return prefs.getBool(_keyIsAdmin) ?? false;
     } catch (e) {
       debugPrint('Error checking admin status: $e');
+      return false;
+    }
+  }
+
+  /// Check if current user is a teacher
+  static Future<bool> isTeacher() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(_keyIsTeacher) ?? false;
+    } catch (e) {
+      debugPrint('Error checking teacher status: $e');
       return false;
     }
   }
@@ -224,6 +259,39 @@ class SessionManager {
       return prefs.getString(_keyDepartment) ?? '';
     } catch (e) {
       debugPrint('Error getting department: $e');
+      return '';
+    }
+  }
+
+  /// Get teacher's ID
+  static Future<String> getTeacherId() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(_keyTeacherId) ?? '';
+    } catch (e) {
+      debugPrint('Error getting teacher ID: $e');
+      return '';
+    }
+  }
+
+  /// Get teacher's subjects
+  static Future<List<String>> getTeacherSubjects() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getStringList(_keyTeacherSubjects) ?? [];
+    } catch (e) {
+      debugPrint('Error getting teacher subjects: $e');
+      return [];
+    }
+  }
+
+  /// Get teacher's designation
+  static Future<String> getDesignation() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(_keyDesignation) ?? '';
+    } catch (e) {
+      debugPrint('Error getting designation: $e');
       return '';
     }
   }
@@ -345,15 +413,16 @@ class SessionManager {
 
   /// Check if session has expired based on inactivity
   /// Sessions expire after 24 hours of inactivity by default
- static Future<bool> isSessionExpired({Duration? maxInactivity}) async {
+  static Future<bool> isSessionExpired({Duration? maxInactivity}) async {
     try {
       final lastActivity = await getLastActivity();
       if (lastActivity == null) return true;
-      
-      final inactivityDuration = maxInactivity ?? const Duration(days: 7); // Changed from 24 hours
+
+      final inactivityDuration =
+          maxInactivity ?? const Duration(days: 7); // Changed from 24 hours
       final now = DateTime.now();
       final timeSinceLastActivity = now.difference(lastActivity);
-      
+
       return timeSinceLastActivity > inactivityDuration;
     } catch (e) {
       debugPrint('Error checking session expiry: $e');
@@ -377,44 +446,58 @@ class SessionManager {
 
   /// Validate current session integrity
   /// Checks if all required session data is present and valid
-    static Future<bool> validateSession() async {
+  static Future<bool> validateSession() async {
     try {
       final session = await getSession();
-      
+
       // Check if user is marked as logged in
       if (session['isLoggedIn'] != true) {
         debugPrint('Session validation failed: User not logged in');
         return false;
       }
-      
+
       // Check if essential user data is present
       final userName = session['userName'] as String;
       final userEmail = session['userEmail'] as String;
-      
+
       if (userName.isEmpty || userEmail.isEmpty) {
         debugPrint('Session validation failed: Missing essential user data');
         await clearSession(); // Clear invalid session
         return false;
       }
-      
+
       // Check if session has expired
       if (await isSessionExpired()) {
         debugPrint('Session validation failed: Session expired');
         await clearSession(); // Clear expired session
         return false;
       }
-      
+
       // For students, roll number validation is optional
       // Don't clear session for missing roll number, just log it
       final isAdmin = session['isAdmin'] as bool;
-      if (!isAdmin) {
+      final isTeacher = session['isTeacher'] as bool;
+
+      if (!isAdmin && !isTeacher) {
+        // This is a student - roll number is optional
         final rollNumber = session['rollNumber'] as String;
         if (rollNumber.isEmpty) {
-          debugPrint('Warning: Student session missing roll number, but continuing...');
+          debugPrint(
+            'Warning: Student session missing roll number, but continuing...',
+          );
           // Don't return false here - roll number might be optional
         }
+      } else if (isTeacher) {
+        // For teachers, validate teacher-specific data
+        final teacherId = session['teacherId'] as String;
+        if (teacherId.isEmpty) {
+          debugPrint(
+            'Warning: Teacher session missing teacher ID, but continuing...',
+          );
+          // Don't return false here - teacher ID might be set later
+        }
       }
-      
+
       debugPrint('Session validation successful');
       return true;
     } catch (e) {
@@ -422,6 +505,7 @@ class SessionManager {
       return false;
     }
   }
+
   /// Get formatted session info for debugging
   static Future<String> getSessionInfo() async {
     try {
@@ -433,10 +517,16 @@ class SessionManager {
       buffer.writeln('=== Session Information ===');
       buffer.writeln('Logged In: ${session['isLoggedIn']}');
       buffer.writeln('Is Admin: ${session['isAdmin']}');
+      buffer.writeln('Is Teacher: ${session['isTeacher']}');
       buffer.writeln('User Name: ${session['userName']}');
       buffer.writeln('User Email: ${session['userEmail']}');
 
-      if (!session['isAdmin']) {
+      if (session['isTeacher'] == true) {
+        buffer.writeln('Teacher ID: ${session['teacherId']}');
+        buffer.writeln('Department: ${session['department']}');
+        buffer.writeln('Designation: ${session['designation']}');
+        buffer.writeln('Subjects: ${session['teacherSubjects']}');
+      } else if (!session['isAdmin']) {
         buffer.writeln('Roll Number: ${session['rollNumber']}');
         buffer.writeln('Department: ${session['department']}');
         buffer.writeln(

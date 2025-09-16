@@ -9,7 +9,6 @@ import 'package:geolocator/geolocator.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
 // Background service (hooks – optional but supported)
 import 'package:flutter_background_service/flutter_background_service.dart';
 

@@ -56,32 +56,95 @@ class _GroupSelectionScreenState extends State<GroupSelectionScreen>
     setState(() => _isLoading = true);
 
     try {
-      final querySnapshot = await FirebaseFirestore.instance
+      // Get student's roll number or email for identification
+      final studentEmail = widget.studentData['email'] ?? '';
+      final studentRollNumber = widget.studentData['rollNumber'] ?? '';
+
+      debugPrint("🔍 Looking for student: $studentEmail / $studentRollNumber");
+
+      // Get all groups first
+      final groupsSnapshot = await FirebaseFirestore.instance
           .collection('groups')
           .orderBy('name')
           .get()
           .timeout(const Duration(seconds: 15));
 
-      final groups =
-          querySnapshot.docs.map((doc) {
-            final data = doc.data();
-            return {
-              'id': doc.id,
-              'name': data['name'] ?? '',
-              'department': data['department'] ?? '',
-              'maxStudents': data['maxStudents'] ?? 0,
-            };
-          }).toList();
+      List<Map<String, dynamic>> studentGroups = [];
 
-      debugPrint("✅ Found ${groups.length} groups");
-      for (var group in groups) {
+      // Check each group to see if the student belongs to it
+      for (var groupDoc in groupsSnapshot.docs) {
+        final groupData = groupDoc.data();
+        final groupId = groupDoc.id;
+        final groupName = groupData['name'] ?? '';
+
+        debugPrint("🔍 Checking group: $groupName ($groupId)");
+
+        try {
+          // Check if student exists in this group's students subcollection
+          final studentsQuery = await FirebaseFirestore.instance
+              .collection('groups')
+              .doc(groupId)
+              .collection('students')
+              .where('email', isEqualTo: studentEmail)
+              .limit(1)
+              .get()
+              .timeout(const Duration(seconds: 10));
+
+          if (studentsQuery.docs.isNotEmpty) {
+            // Student found in this group
+            debugPrint("✅ Student found in group: $groupName");
+            studentGroups.add({
+              'id': groupId,
+              'name': groupName,
+              'department': groupData['department'] ?? '',
+              'maxStudents': groupData['maxStudents'] ?? 0,
+            });
+          } else {
+            // Also try to find by roll number if email search fails
+            if (studentRollNumber.isNotEmpty) {
+              final rollNumberQuery = await FirebaseFirestore.instance
+                  .collection('groups')
+                  .doc(groupId)
+                  .collection('students')
+                  .where('rollNumber', isEqualTo: studentRollNumber)
+                  .limit(1)
+                  .get()
+                  .timeout(const Duration(seconds: 10));
+
+              if (rollNumberQuery.docs.isNotEmpty) {
+                debugPrint(
+                  "✅ Student found in group by roll number: $groupName",
+                );
+                studentGroups.add({
+                  'id': groupId,
+                  'name': groupName,
+                  'department': groupData['department'] ?? '',
+                  'maxStudents': groupData['maxStudents'] ?? 0,
+                });
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint("⚠️ Error checking group $groupName: $e");
+        }
+      }
+
+      debugPrint("✅ Found ${studentGroups.length} groups for this student");
+      for (var group in studentGroups) {
         debugPrint("  - ${group['name']} (${group['department']})");
       }
 
       setState(() {
-        _groups = groups;
+        _groups = studentGroups;
         _isLoading = false;
       });
+
+      // If no groups found, show appropriate message
+      if (studentGroups.isEmpty) {
+        _showError(
+          'You are not enrolled in any classroom groups. Please contact your administrator.',
+        );
+      }
     } catch (e) {
       debugPrint("❌ Error loading groups: $e");
       setState(() => _isLoading = false);
@@ -280,7 +343,9 @@ class _GroupSelectionScreenState extends State<GroupSelectionScreen>
         ),
         const SizedBox(height: 8),
         Text(
-          'Choose the classroom group you belong to:',
+          _groups.length == 1
+              ? 'You are enrolled in this classroom group:'
+              : 'Choose from your enrolled classroom groups:',
           style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
         ),
         const SizedBox(height: 24),
@@ -437,7 +502,7 @@ class _GroupSelectionScreenState extends State<GroupSelectionScreen>
           Icon(Icons.school_outlined, size: 80, color: Colors.grey.shade400),
           const SizedBox(height: 16),
           Text(
-            'No Groups Available',
+            'Not Enrolled in Any Groups',
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
@@ -446,7 +511,7 @@ class _GroupSelectionScreenState extends State<GroupSelectionScreen>
           ),
           const SizedBox(height: 8),
           Text(
-            'There are no classroom groups available at the moment. Please contact your administrator.',
+            'You are not currently enrolled in any classroom groups. Please contact your administrator to be added to a group.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 16, color: Colors.grey.shade500),
           ),
@@ -454,7 +519,7 @@ class _GroupSelectionScreenState extends State<GroupSelectionScreen>
           ElevatedButton.icon(
             onPressed: _loadGroups,
             icon: const Icon(Icons.refresh),
-            label: const Text('Refresh'),
+            label: const Text('Check Again'),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF4CAF50),
               foregroundColor: Colors.white,
