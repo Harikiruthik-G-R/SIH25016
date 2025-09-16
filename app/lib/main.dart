@@ -633,8 +633,17 @@ class _SplashScreenState extends State<SplashScreen>
         }
 
         // User has valid session - navigate to appropriate home screen
+        String route;
+        if (session['isAdmin'] == true) {
+          route = '/admin';
+        } else if (session['isTeacher'] == true) {
+          route = '/teacherDashboard';
+        } else {
+          route = '/students';
+        }
+
         Navigator.of(context).pushReplacementNamed(
-          session['isAdmin'] == true ? '/admin' : '/students',
+          route,
           arguments: {
             'userName': session['userName'] ?? '',
             'userEmail': session['userEmail'] ?? '',
@@ -642,6 +651,16 @@ class _SplashScreenState extends State<SplashScreen>
             'groupId': session['groupId'] ?? '',
             'groupName': session['groupName'] ?? '',
             'department': session['department'] ?? '',
+            // Teacher-specific arguments with correct keys
+            'teacherId': session['teacherId'] ?? '',
+            'name':
+                session['userName'] ?? '', // Use correct key for teacher name
+            'email':
+                session['userEmail'] ?? '', // Use correct key for teacher email
+            'subjects':
+                session['teacherSubjects'] ??
+                [], // Use correct key for subjects
+            'designation': session['designation'] ?? '',
           },
         );
       } else {

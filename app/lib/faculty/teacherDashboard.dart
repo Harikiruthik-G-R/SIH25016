@@ -32,6 +32,15 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
   @override
   void initState() {
     super.initState();
+    // Debug: Print received teacher data
+    print('🔍 TeacherDashboard Debug Info:');
+    print('Teacher ID: ${widget.teacherId}');
+    print('Teacher Name: ${widget.teacherName}');
+    print('Teacher Email: ${widget.teacherEmail}');
+    print('Subjects: ${widget.subjects}');
+    print('Department: ${widget.department}');
+    print('Designation: ${widget.designation}');
+
     _loadTeacherData();
   }
 
@@ -1238,7 +1247,7 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
             return record['status'] == 'completed';
           case 'Ongoing':
             return record['status'] == 'ongoing';
-          case 'Unauthorized':
+          case 'Absentees':
             return record['isEnrolled'] == false;
           default:
             break;
@@ -1256,7 +1265,7 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
         'completedSessions': 0,
         'ongoingSessions': 0,
         'authorizedStudents': 0,
-        'unauthorizedStudents': 0,
+        'absenteeStudents': 0,
       };
 
       for (var record in _attendanceRecords) {
@@ -1271,8 +1280,7 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
         if (record['isEnrolled'] == true) {
           stats['authorizedStudents'] = (stats['authorizedStudents'] ?? 0) + 1;
         } else {
-          stats['unauthorizedStudents'] =
-              (stats['unauthorizedStudents'] ?? 0) + 1;
+          stats['absenteeStudents'] = (stats['absenteeStudents'] ?? 0) + 1;
         }
       }
 
@@ -1663,7 +1671,7 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
                       'Status',
                       Icons.verified,
                       _selectedStatusFilter,
-                      ['All Status', 'Present', 'Ongoing', 'Unauthorized'],
+                      ['All Status', 'Present', 'Ongoing', 'Absentees'],
                       (value) => setState(() {
                         _selectedStatusFilter = value ?? 'All Status';
                         _attendanceRecords = _applyFilters(_attendanceRecords);
@@ -1738,9 +1746,9 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
         'gradient': [Color(0xFFE65100), Color(0xFFBF360C)],
       },
       {
-        'title': 'Unauthorized',
-        'value': '${_attendanceStats['unauthorizedStudents'] ?? 0}',
-        'icon': Icons.warning_outlined,
+        'title': 'Absentees',
+        'value': '${_attendanceStats['absenteeStudents'] ?? 0}',
+        'icon': Icons.person_off_outlined,
         'color': Color(0xFFD32F2F),
         'gradient': [Color(0xFFD32F2F), Color(0xFFC62828)],
       },
@@ -1941,7 +1949,7 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: Text(
-                                    'UNAUTHORIZED',
+                                    'ABSENTEE',
                                     style: TextStyle(
                                       fontSize: 10,
                                       color: Colors.white,
@@ -2622,14 +2630,14 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
     // Group students by enrollment status
     Map<String, List<Map<String, dynamic>>> groupedStudents = {
       'Enrolled': [],
-      'Unauthorized': [],
+      'Absentees': [],
     };
 
     for (var record in _attendanceRecords) {
       if (record['isEnrolled'] == true) {
         groupedStudents['Enrolled']!.add(record);
       } else {
-        groupedStudents['Unauthorized']!.add(record);
+        groupedStudents['Absentees']!.add(record);
       }
     }
 
@@ -2680,10 +2688,10 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.warning, size: 20),
+                      Icon(Icons.person_off, size: 20),
                       SizedBox(width: 8),
                       Text(
-                        'Unauthorized (${groupedStudents['Unauthorized']!.length})',
+                        'Absentees (${groupedStudents['Absentees']!.length})',
                       ),
                     ],
                   ),
@@ -2696,7 +2704,7 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
               children: [
                 _buildEnhancedStudentsList(groupedStudents['Enrolled']!, true),
                 _buildEnhancedStudentsList(
-                  groupedStudents['Unauthorized']!,
+                  groupedStudents['Absentees']!,
                   false,
                 ),
               ],
@@ -2743,7 +2751,7 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
               ),
               SizedBox(height: 24),
               Text(
-                'No ${isEnrolled ? 'enrolled' : 'unauthorized'} students',
+                'No ${isEnrolled ? 'enrolled' : 'absentee'} students',
                 style: TextStyle(
                   fontSize: 20,
                   color: Colors.grey[700],
@@ -2754,7 +2762,7 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
               Text(
                 isEnrolled
                     ? 'All students are properly enrolled'
-                    : 'No unauthorized access detected',
+                    : 'No absentee records found',
                 style: TextStyle(fontSize: 16, color: Colors.grey[500]),
                 textAlign: TextAlign.center,
               ),
@@ -3162,7 +3170,7 @@ class StudentDetailsDialog extends StatelessWidget {
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Text(
-                                    isEnrolled ? 'ENROLLED' : 'UNAUTHORIZED',
+                                    isEnrolled ? 'ENROLLED' : 'ABSENTEE',
                                     style: TextStyle(
                                       color:
                                           isEnrolled

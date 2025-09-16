@@ -101,12 +101,16 @@ class SessionManager {
     return {
       'isLoggedIn': false,
       'isAdmin': false,
+      'isTeacher': false,
       'userName': '',
       'userEmail': '',
       'rollNumber': '',
       'groupId': '',
       'groupName': '',
       'department': '',
+      'teacherId': '',
+      'teacherSubjects': <String>[],
+      'designation': '',
       'loginTime': '',
       'lastActivity': '',
     };
@@ -122,12 +126,16 @@ class SessionManager {
       await Future.wait([
         prefs.remove(_keyIsLoggedIn),
         prefs.remove(_keyIsAdmin),
+        prefs.remove(_keyIsTeacher),
         prefs.remove(_keyUserName),
         prefs.remove(_keyUserEmail),
         prefs.remove(_keyRollNumber),
         prefs.remove(_keyGroupId),
         prefs.remove(_keyGroupName),
         prefs.remove(_keyDepartment),
+        prefs.remove(_keyTeacherId),
+        prefs.remove(_keyTeacherSubjects),
+        prefs.remove(_keyDesignation),
         prefs.remove(_keyLoginTime),
         prefs.remove(_keyLastActivity),
       ]);
@@ -174,6 +182,17 @@ class SessionManager {
       return prefs.getBool(_keyIsAdmin) ?? false;
     } catch (e) {
       debugPrint('Error checking admin status: $e');
+      return false;
+    }
+  }
+
+  /// Check if current user is a teacher
+  static Future<bool> isTeacher() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(_keyIsTeacher) ?? false;
+    } catch (e) {
+      debugPrint('Error checking teacher status: $e');
       return false;
     }
   }
@@ -240,6 +259,39 @@ class SessionManager {
       return prefs.getString(_keyDepartment) ?? '';
     } catch (e) {
       debugPrint('Error getting department: $e');
+      return '';
+    }
+  }
+
+  /// Get teacher's ID
+  static Future<String> getTeacherId() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(_keyTeacherId) ?? '';
+    } catch (e) {
+      debugPrint('Error getting teacher ID: $e');
+      return '';
+    }
+  }
+
+  /// Get teacher's subjects
+  static Future<List<String>> getTeacherSubjects() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getStringList(_keyTeacherSubjects) ?? [];
+    } catch (e) {
+      debugPrint('Error getting teacher subjects: $e');
+      return [];
+    }
+  }
+
+  /// Get teacher's designation
+  static Future<String> getDesignation() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(_keyDesignation) ?? '';
+    } catch (e) {
+      debugPrint('Error getting designation: $e');
       return '';
     }
   }
@@ -424,13 +476,25 @@ class SessionManager {
       // For students, roll number validation is optional
       // Don't clear session for missing roll number, just log it
       final isAdmin = session['isAdmin'] as bool;
-      if (!isAdmin) {
+      final isTeacher = session['isTeacher'] as bool;
+
+      if (!isAdmin && !isTeacher) {
+        // This is a student - roll number is optional
         final rollNumber = session['rollNumber'] as String;
         if (rollNumber.isEmpty) {
           debugPrint(
             'Warning: Student session missing roll number, but continuing...',
           );
           // Don't return false here - roll number might be optional
+        }
+      } else if (isTeacher) {
+        // For teachers, validate teacher-specific data
+        final teacherId = session['teacherId'] as String;
+        if (teacherId.isEmpty) {
+          debugPrint(
+            'Warning: Teacher session missing teacher ID, but continuing...',
+          );
+          // Don't return false here - teacher ID might be set later
         }
       }
 
@@ -453,10 +517,16 @@ class SessionManager {
       buffer.writeln('=== Session Information ===');
       buffer.writeln('Logged In: ${session['isLoggedIn']}');
       buffer.writeln('Is Admin: ${session['isAdmin']}');
+      buffer.writeln('Is Teacher: ${session['isTeacher']}');
       buffer.writeln('User Name: ${session['userName']}');
       buffer.writeln('User Email: ${session['userEmail']}');
 
-      if (!session['isAdmin']) {
+      if (session['isTeacher'] == true) {
+        buffer.writeln('Teacher ID: ${session['teacherId']}');
+        buffer.writeln('Department: ${session['department']}');
+        buffer.writeln('Designation: ${session['designation']}');
+        buffer.writeln('Subjects: ${session['teacherSubjects']}');
+      } else if (!session['isAdmin']) {
         buffer.writeln('Roll Number: ${session['rollNumber']}');
         buffer.writeln('Department: ${session['department']}');
         buffer.writeln(
