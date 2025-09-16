@@ -2,7 +2,7 @@ import 'package:GeoAt/admin/admin_home.dart';
 import 'package:GeoAt/sessionmanager.dart';
 import 'package:GeoAt/users/users_home.dart';
 import 'package:GeoAt/users/group_selection.dart';
-import 'package:GeoAt/faculty/teacherDashboard.dart';
+import 'faculty/teacherDashboard.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:io';

@@ -9,6 +9,7 @@ class TeacherDashboard extends StatefulWidget {
   final List<String> subjects;
   final String department;
   final String designation;
+  final List<Map<String, dynamic>>? groups;
 
   const TeacherDashboard({
     super.key,
@@ -18,6 +19,7 @@ class TeacherDashboard extends StatefulWidget {
     required this.subjects,
     required this.department,
     required this.designation,
+    this.groups,
   });
 
   @override
@@ -991,6 +993,17 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
   String _selectedGroupFilter = 'All Groups';
   String _selectedStatusFilter = 'All Status';
 
+  // Search functionality
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  // Cached students data to avoid reloading on search
+  Map<String, List<Map<String, dynamic>>> _cachedStudentsData = {
+    'Enrolled': [],
+    'Absentees': [],
+  };
+  bool _studentsDataLoaded = false;
+
   @override
   void initState() {
     super.initState();
@@ -1332,7 +1345,33 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
   void _showStudentDetails(Map<String, dynamic> record) {
     showDialog(
       context: context,
-      builder: (context) => StudentDetailsDialog(record: record),
+      builder:
+          (context) => AlertDialog(
+            title: Text('Student Details'),
+            content: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Name: ${record['studentName'] ?? 'N/A'}'),
+                  SizedBox(height: 8),
+                  Text('Roll Number: ${record['rollNumber'] ?? 'N/A'}'),
+                  SizedBox(height: 8),
+                  Text('Group: ${record['groupName'] ?? 'N/A'}'),
+                  SizedBox(height: 8),
+                  Text('Department: ${record['department'] ?? 'N/A'}'),
+                  SizedBox(height: 8),
+                  Text('Status: ${record['status'] ?? 'N/A'}'),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text('Close'),
+              ),
+            ],
+          ),
     );
   }
 
@@ -2626,21 +2665,359 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
     );
   }
 
-  Widget _buildStudentsTab() {
-    // Group students by enrollment status
-    Map<String, List<Map<String, dynamic>>> groupedStudents = {
-      'Enrolled': [],
-      'Absentees': [],
-    };
+  Future<Map<String, List<Map<String, dynamic>>>>
+  _loadAllStudentsInGroups() async {
+    try {
+      Map<String, List<Map<String, dynamic>>> groupedStudents = {
+        'Enrolled': [],
+        'Absentees': [],
+      };
 
-    for (var record in _attendanceRecords) {
-      if (record['isEnrolled'] == true) {
-        groupedStudents['Enrolled']!.add(record);
-      } else {
-        groupedStudents['Absentees']!.add(record);
+      // Get groups passed from the parent widget
+      List<Map<String, dynamic>> teacherGroups = widget.groups;
+
+      print('🔍 Loading students for ${teacherGroups.length} groups...');
+
+      // Debug: List all available groups in Firestore
+      try {
+        final allGroupsQuery =
+            await FirebaseFirestore.instance.collection('groups').get();
+        print('🏫 Available groups in Firestore:');
+        for (var doc in allGroupsQuery.docs) {
+          print('   - ${doc.id}: ${doc.data()['name'] ?? 'Unknown Name'}');
+        }
+      } catch (e) {
+        print('❌ Error fetching all groups: $e');
       }
+
+      for (var group in teacherGroups) {
+        final groupName = group['groupName'] ?? 'Unknown Group';
+        final originalGroupId = group['groupId'];
+
+        print('📚 Processing group: $groupName');
+        print('🔑 Original Group ID: "$originalGroupId"');
+        print('📋 Full group data: $group');
+
+        // Find the correct group ID by querying with group name
+        String? correctGroupId;
+        try {
+          final allGroupsQuery =
+              await FirebaseFirestore.instance.collection('groups').get();
+          for (var doc in allGroupsQuery.docs) {
+            final groupData = doc.data();
+            if (groupData['name'] == groupName) {
+              correctGroupId = doc.id;
+              print(
+                '✅ Found correct group ID: $correctGroupId for group name: $groupName',
+              );
+              break;
+            }
+          }
+        } catch (e) {
+          print('❌ Error finding correct group ID: $e');
+        }
+
+        if (correctGroupId == null) {
+          print('⚠️ Could not find correct group ID for group: $groupName');
+          continue;
+        }
+
+        // Try to get students from groups collection (students subcollection)
+        try {
+          print(
+            '🔎 Querying students subcollection for group $correctGroupId...',
+          );
+
+          final studentsQuery =
+              await FirebaseFirestore.instance
+                  .collection('groups')
+                  .doc(correctGroupId)
+                  .collection('students')
+                  .get();
+
+          print(
+            '📊 Students query result: ${studentsQuery.docs.length} documents found',
+          );
+
+          if (studentsQuery.docs.isEmpty) {
+            print('⚠️ No students found in subcollection for group $groupName');
+          } else {
+            print('📋 Processing ${studentsQuery.docs.length} students...');
+          }
+
+          for (var studentDoc in studentsQuery.docs) {
+            final studentData = studentDoc.data();
+            final studentId = studentDoc.id; // Auto-generated document ID
+            final rollNumber = studentData['rollNumber'] ?? 'Unknown';
+
+            print(
+              '👤 Processing student: ID=$studentId, Roll=$rollNumber, Name=${studentData['name'] ?? 'Unknown'}',
+            );
+
+            // Create student record with group information
+            final studentRecord = {
+              'id': studentId,
+              'rollNumber': rollNumber,
+              'studentName':
+                  studentData['name'] ??
+                  studentData['studentName'] ??
+                  'Unknown',
+              'studentEmail':
+                  studentData['email'] ?? studentData['studentEmail'] ?? '',
+              'department': studentData['department'] ?? '',
+              'groupId': correctGroupId,
+              'groupName': groupName,
+              'isEnrolled': true,
+              'phone': studentData['phone'] ?? '',
+              'year': studentData['year'] ?? '',
+              'section': studentData['section'] ?? '',
+              'admissionYear': studentData['admissionYear'] ?? '',
+              'biometricRegistered':
+                  studentData['biometricRegistered'] ?? false,
+              'createdAt': studentData['createdAt'],
+              // Add attendance statistics (will be calculated later if needed)
+              'totalSessions': 0,
+              'attendedSessions': 0,
+              'attendanceRate': 0,
+            };
+
+            groupedStudents['Enrolled']!.add(studentRecord);
+          }
+
+          print(
+            '✅ Found ${studentsQuery.docs.length} students in subcollection for group $groupName',
+          );
+        } catch (e) {
+          print(
+            '⚠️ Error accessing students subcollection for group $correctGroupId: $e',
+          );
+        }
+
+        // If no students found in subcollection, try to get from group document itself
+        if (groupedStudents['Enrolled']!
+            .where((s) => s['groupId'] == correctGroupId)
+            .isEmpty) {
+          try {
+            final groupDoc =
+                await FirebaseFirestore.instance
+                    .collection('groups')
+                    .doc(correctGroupId)
+                    .get();
+
+            if (groupDoc.exists) {
+              final groupData = groupDoc.data();
+              if (groupData != null && groupData.containsKey('students')) {
+                final groupStudents = groupData['students'];
+                if (groupStudents is List) {
+                  for (var student in groupStudents) {
+                    String rollNumber = '';
+                    String studentName = 'Unknown';
+                    String studentEmail = '';
+                    String department = '';
+
+                    if (student is String) {
+                      // Student is just a roll number string
+                      rollNumber = student;
+                    } else if (student is Map<String, dynamic>) {
+                      // Student is an object with details
+                      rollNumber =
+                          student['rollNumber']?.toString() ??
+                          student['roll']?.toString() ??
+                          student['id']?.toString() ??
+                          '';
+                      studentName =
+                          student['name']?.toString() ??
+                          student['studentName']?.toString() ??
+                          'Unknown';
+                      studentEmail =
+                          student['email']?.toString() ??
+                          student['studentEmail']?.toString() ??
+                          '';
+                      department = student['department']?.toString() ?? '';
+                    }
+
+                    if (rollNumber.isNotEmpty) {
+                      final studentRecord = {
+                        'rollNumber': rollNumber,
+                        'studentName': studentName,
+                        'studentEmail': studentEmail,
+                        'department': department,
+                        'groupId': correctGroupId,
+                        'groupName': groupName,
+                        'isEnrolled': true,
+                        'phone': '',
+                        'year': '',
+                        'section': '',
+                        'admissionYear': '',
+                        'totalSessions': 0,
+                        'attendedSessions': 0,
+                        'attendanceRate': 0,
+                      };
+
+                      groupedStudents['Enrolled']!.add(studentRecord);
+                    }
+                  }
+                }
+              }
+            }
+            print(
+              '✅ Found ${groupedStudents['Enrolled']!.where((s) => s['groupId'] == correctGroupId).length} students in group document for $groupName',
+            );
+          } catch (e) {
+            print('⚠️ Error accessing group document for $correctGroupId: $e');
+          }
+        }
+      }
+
+      // Calculate attendance statistics for enrolled students
+      await _calculateStudentAttendanceStats(groupedStudents['Enrolled']!);
+
+      // Add absentees from attendance records (students who attended but are not in any group)
+      for (var record in _attendanceRecords) {
+        if (record['isEnrolled'] == false) {
+          // Check if this student is already in the absentees list
+          bool alreadyExists = groupedStudents['Absentees']!.any(
+            (student) => student['rollNumber'] == record['rollNumber'],
+          );
+
+          if (!alreadyExists) {
+            groupedStudents['Absentees']!.add({
+              'rollNumber': record['rollNumber'],
+              'studentName': record['studentName'] ?? 'Unknown',
+              'studentEmail': record['studentEmail'] ?? '',
+              'department': record['department'] ?? '',
+              'groupId': record['groupId'] ?? '',
+              'groupName': record['groupName'] ?? 'Unknown Group',
+              'isEnrolled': false,
+              'phone': '',
+              'year': '',
+              'section': '',
+              'admissionYear': '',
+              'totalSessions': 1,
+              'attendedSessions': record['status'] == 'completed' ? 1 : 0,
+              'attendanceRate': record['status'] == 'completed' ? 100 : 0,
+            });
+          }
+        }
+      }
+
+      print(
+        '📊 Final count - Enrolled: ${groupedStudents['Enrolled']!.length}, Absentees: ${groupedStudents['Absentees']!.length}',
+      );
+
+      return groupedStudents;
+    } catch (e) {
+      print('❌ Error loading all students: $e');
+      throw Exception('Failed to load students: $e');
+    }
+  }
+
+  Future<void> _calculateStudentAttendanceStats(
+    List<Map<String, dynamic>> students,
+  ) async {
+    try {
+      for (var student in students) {
+        final rollNumber = student['rollNumber'];
+        int totalSessions = 0;
+        int attendedSessions = 0;
+
+        // Count attendance sessions for this student in the current subject
+        for (var record in _attendanceRecords) {
+          if (record['rollNumber'] == rollNumber &&
+              record['subject'] == widget.subject) {
+            totalSessions++;
+            if (record['status'] == 'completed') {
+              attendedSessions++;
+            }
+          }
+        }
+
+        // Update student record with attendance stats
+        student['totalSessions'] = totalSessions;
+        student['attendedSessions'] = attendedSessions;
+        student['attendanceRate'] =
+            totalSessions > 0
+                ? ((attendedSessions / totalSessions) * 100).round()
+                : 0;
+      }
+    } catch (e) {
+      print('⚠️ Error calculating attendance stats: $e');
+    }
+  }
+
+  Widget _buildStudentsTab() {
+    if (!_studentsDataLoaded) {
+      return FutureBuilder<Map<String, List<Map<String, dynamic>>>>(
+        future: _loadAllStudentsInGroups(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      Color(0xFF1B5E20),
+                    ),
+                  ),
+                  SizedBox(height: 16),
+                  Text(
+                    'Loading students...',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Color(0xFF1B5E20),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
+                  SizedBox(height: 16),
+                  Text(
+                    'Error loading students',
+                    style: TextStyle(fontSize: 18, color: Colors.red[600]),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    '${snapshot.error}',
+                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            );
+          }
+
+          // Cache the data and rebuild with the content
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            setState(() {
+              _cachedStudentsData =
+                  snapshot.data ?? {'Enrolled': [], 'Absentees': []};
+              _studentsDataLoaded = true;
+            });
+          });
+
+          return _buildStudentsContent(
+            snapshot.data ?? {'Enrolled': [], 'Absentees': []},
+          );
+        },
+      );
     }
 
+    return _buildStudentsContent(_cachedStudentsData);
+  }
+
+  Widget _buildStudentsContent(
+    Map<String, List<Map<String, dynamic>>> groupedStudents,
+  ) {
     return DefaultTabController(
       length: 2,
       child: Column(
@@ -2679,7 +3056,9 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
                     children: [
                       Icon(Icons.verified_user, size: 20),
                       SizedBox(width: 8),
-                      Text('Enrolled (${groupedStudents['Enrolled']!.length})'),
+                      Text(
+                        'Enrolled (${_filterStudents(groupedStudents['Enrolled']!).length})',
+                      ),
                     ],
                   ),
                 ),
@@ -2691,7 +3070,7 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
                       Icon(Icons.person_off, size: 20),
                       SizedBox(width: 8),
                       Text(
-                        'Absentees (${groupedStudents['Absentees']!.length})',
+                        'Absentees (${_filterStudents(groupedStudents['Absentees']!).length})',
                       ),
                     ],
                   ),
@@ -2699,12 +3078,60 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
               ],
             ),
           ),
+          // Search Bar
+          Container(
+            margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 8,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: TextField(
+              controller: _searchController,
+              onChanged: _onSearchChanged,
+              decoration: InputDecoration(
+                hintText: 'Search students by name, roll number, or email...',
+                hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
+                prefixIcon: Icon(
+                  Icons.search,
+                  color: Color(0xFF1B5E20),
+                  size: 20,
+                ),
+                suffixIcon:
+                    _searchQuery.isNotEmpty
+                        ? IconButton(
+                          icon: Icon(
+                            Icons.clear,
+                            color: Colors.grey[400],
+                            size: 20,
+                          ),
+                          onPressed: _clearSearch,
+                        )
+                        : null,
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+              ),
+              style: TextStyle(fontSize: 14),
+            ),
+          ),
           Expanded(
             child: TabBarView(
               children: [
-                _buildEnhancedStudentsList(groupedStudents['Enrolled']!, true),
                 _buildEnhancedStudentsList(
-                  groupedStudents['Absentees']!,
+                  _filterStudents(groupedStudents['Enrolled']!),
+                  true,
+                ),
+                _buildEnhancedStudentsList(
+                  _filterStudents(groupedStudents['Absentees']!),
                   false,
                 ),
               ],
@@ -2761,7 +3188,7 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
               SizedBox(height: 12),
               Text(
                 isEnrolled
-                    ? 'All students are properly enrolled'
+                    ? 'No students enrolled in any groups for this subject'
                     : 'No absentee records found',
                 style: TextStyle(fontSize: 16, color: Colors.grey[500]),
                 textAlign: TextAlign.center,
@@ -2772,30 +3199,18 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
       );
     }
 
-    // Group by student (roll number)
-    Map<String, List<Map<String, dynamic>>> studentSessions = {};
-    for (var record in students) {
-      final rollNumber = record['rollNumber'];
-      if (!studentSessions.containsKey(rollNumber)) {
-        studentSessions[rollNumber] = [];
-      }
-      studentSessions[rollNumber]!.add(record);
-    }
-
     return ListView.builder(
       padding: EdgeInsets.all(16),
-      itemCount: studentSessions.length,
+      itemCount: students.length,
       itemBuilder: (context, index) {
-        final rollNumber = studentSessions.keys.elementAt(index);
-        final sessions = studentSessions[rollNumber]!;
-        final studentData = sessions.first;
-        final sessionCount = sessions.length;
-        final completedSessions =
-            sessions.where((s) => s['status'] == 'completed').length;
-        final attendanceRate =
-            sessionCount > 0
-                ? (completedSessions / sessionCount * 100).round()
-                : 0;
+        final student = students[index];
+        final rollNumber = student['rollNumber'] ?? 'Unknown';
+        final studentName = student['studentName'] ?? 'Unknown';
+        final department = student['department'] ?? '';
+        final groupName = student['groupName'] ?? 'Unknown Group';
+        final totalSessions = student['totalSessions'] ?? 0;
+        final attendedSessions = student['attendedSessions'] ?? 0;
+        final attendanceRate = student['attendanceRate'] ?? 0;
 
         return Container(
           margin: EdgeInsets.only(bottom: 16),
@@ -2820,8 +3235,8 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
               tilePadding: EdgeInsets.all(20),
               childrenPadding: EdgeInsets.only(left: 20, right: 20, bottom: 20),
               leading: Container(
-                width: 56,
-                height: 56,
+                width: 60,
+                height: 60,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors:
@@ -2841,25 +3256,14 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
                     ),
                   ],
                 ),
-                child: Center(
-                  child: Text(
-                    rollNumber.length >= 2
-                        ? rollNumber.substring(rollNumber.length - 2)
-                        : rollNumber,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                ),
+                child: Icon(Icons.person, color: Colors.white, size: 30),
               ),
               title: Text(
-                studentData['studentName'] ?? 'Unknown',
+                studentName,
                 style: TextStyle(
-                  fontWeight: FontWeight.bold,
                   fontSize: 18,
-                  color: Colors.grey[800],
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1B5E20),
                 ),
               ),
               subtitle: Column(
@@ -2868,821 +3272,226 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
                   SizedBox(height: 8),
                   Row(
                     children: [
+                      Icon(
+                        Icons.badge_outlined,
+                        size: 16,
+                        color: Colors.grey[600],
+                      ),
+                      SizedBox(width: 6),
+                      Text(
+                        'Roll: $rollNumber',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.group_outlined,
+                        size: 16,
+                        color: Colors.grey[600],
+                      ),
+                      SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          groupName,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (department.isNotEmpty) ...[
+                    SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.school_outlined,
+                          size: 16,
+                          color: Colors.grey[600],
+                        ),
+                        SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            department,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[600],
+                              fontWeight: FontWeight.w500,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  SizedBox(height: 12),
+                  Row(
+                    children: [
                       Container(
                         padding: EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
+                          horizontal: 12,
+                          vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: Color(0xFF1976D2).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
+                          gradient: LinearGradient(
+                            colors:
+                                attendanceRate >= 75
+                                    ? [Color(0xFF2E7D32), Color(0xFF1B5E20)]
+                                    : attendanceRate >= 50
+                                    ? [Color(0xFFE65100), Color(0xFFBF360C)]
+                                    : [Color(0xFFD32F2F), Color(0xFFC62828)],
+                          ),
+                          borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          '$completedSessions/$sessionCount sessions',
+                          '$attendanceRate%',
                           style: TextStyle(
+                            color: Colors.white,
                             fontSize: 12,
-                            color: Color(0xFF1976D2),
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                       ),
-                      SizedBox(width: 8),
-                      Container(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color:
-                              attendanceRate >= 80
-                                  ? Color(0xFF2E7D32).withOpacity(0.1)
-                                  : attendanceRate >= 60
-                                  ? Color(0xFFE65100).withOpacity(0.1)
-                                  : Color(0xFFD32F2F).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          '$attendanceRate% rate',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color:
-                                attendanceRate >= 80
-                                    ? Color(0xFF2E7D32)
-                                    : attendanceRate >= 60
-                                    ? Color(0xFFE65100)
-                                    : Color(0xFFD32F2F),
-                            fontWeight: FontWeight.w600,
-                          ),
+                      SizedBox(width: 12),
+                      Text(
+                        '$attendedSessions/$totalSessions sessions',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
                   ),
                 ],
               ),
-              children:
-                  sessions.map((session) {
-                    final sessionDate =
-                        session['date'] != null
-                            ? (session['date'] as Timestamp).toDate()
-                            : null;
-                    final isCompleted = session['status'] == 'completed';
-
-                    return Container(
-                      margin: EdgeInsets.only(bottom: 8),
-                      padding: EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color:
-                              isCompleted
-                                  ? Color(0xFF2E7D32).withOpacity(0.3)
-                                  : Color(0xFFE65100).withOpacity(0.3),
+              children: [
+                Container(
+                  padding: EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[50],
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey[200]!),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Student Details',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1B5E20),
                         ),
                       ),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(12),
-                        onTap: () => _showStudentDetails(session),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color:
-                                    isCompleted
-                                        ? Color(0xFF2E7D32).withOpacity(0.1)
-                                        : Color(0xFFE65100).withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Icon(
-                                isCompleted
-                                    ? Icons.check_circle
-                                    : Icons.schedule,
-                                color:
-                                    isCompleted
-                                        ? Color(0xFF2E7D32)
-                                        : Color(0xFFE65100),
-                                size: 20,
-                              ),
-                            ),
-                            SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    sessionDate != null
-                                        ? _formatDate(sessionDate)
-                                        : 'Unknown Date',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.grey[800],
-                                    ),
-                                  ),
-                                  SizedBox(height: 4),
-                                  Text(
-                                    '${session['roomOrLocation'] ?? 'Unknown Location'} • Period ${session['period'] ?? 'N/A'}',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: Colors.grey[600],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            if (session['durationMinutes'] != null)
-                              Container(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.grey[100],
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  '${session['durationMinutes'].toInt()}min',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey[700],
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                          ],
+                      SizedBox(height: 12),
+                      _buildStudentDetailRow('Roll Number', rollNumber),
+                      _buildStudentDetailRow('Name', studentName),
+                      if (student['studentEmail']?.toString().isNotEmpty ==
+                          true)
+                        _buildStudentDetailRow(
+                          'Email',
+                          student['studentEmail'],
+                        ),
+                      if (department.isNotEmpty)
+                        _buildStudentDetailRow('Department', department),
+                      _buildStudentDetailRow('Group', groupName),
+                      if (student['year']?.toString().isNotEmpty == true)
+                        _buildStudentDetailRow('Year', student['year']),
+                      if (student['section']?.toString().isNotEmpty == true)
+                        _buildStudentDetailRow('Section', student['section']),
+                      if (student['phone']?.toString().isNotEmpty == true)
+                        _buildStudentDetailRow('Phone', student['phone']),
+                      SizedBox(height: 16),
+                      Text(
+                        'Attendance Summary for ${widget.subject}',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1B5E20),
                         ),
                       ),
-                    );
-                  }).toList(),
+                      SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildAttendanceStatCard(
+                              'Total Sessions',
+                              totalSessions.toString(),
+                              Icons.assignment_outlined,
+                              Color(0xFF1976D2),
+                            ),
+                          ),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: _buildAttendanceStatCard(
+                              'Attended',
+                              attendedSessions.toString(),
+                              Icons.check_circle_outline,
+                              Color(0xFF2E7D32),
+                            ),
+                          ),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: _buildAttendanceStatCard(
+                              'Rate',
+                              '$attendanceRate%',
+                              Icons.trending_up,
+                              attendanceRate >= 75
+                                  ? Color(0xFF2E7D32)
+                                  : attendanceRate >= 50
+                                  ? Color(0xFFE65100)
+                                  : Color(0xFFD32F2F),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
         );
       },
     );
   }
-} // End of _SubjectAttendanceScreenState class
 
-String _formatDate(DateTime date) {
-  return '${date.day.toString().padLeft(2, '0')}-${date.month.toString().padLeft(2, '0')}-${date.year}';
-}
+  Widget _buildStudentDetailRow(String label, dynamic value) {
+    if (value == null || value.toString().trim().isEmpty) {
+      return SizedBox.shrink();
+    }
 
-// Student Details Dialog
-class StudentDetailsDialog extends StatelessWidget {
-  final Map<String, dynamic> record;
-
-  const StudentDetailsDialog({super.key, required this.record});
-
-  @override
-  Widget build(BuildContext context) {
-    final checkInTime =
-        record['checkInAt'] != null
-            ? (record['checkInAt'] as Timestamp).toDate()
-            : null;
-    final checkOutTime =
-        record['checkOutAt'] != null
-            ? (record['checkOutAt'] as Timestamp).toDate()
-            : null;
-    final expectedEndTime =
-        record['expectedEndAt'] != null
-            ? (record['expectedEndAt'] as Timestamp).toDate()
-            : null;
-
-    final isEnrolled = record['isEnrolled'] == true;
-    final isCompleted = record['status'] == 'completed';
-
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      child: Container(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.85,
-          maxWidth: 500,
-        ),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.white, Colors.grey[50]!],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(28),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.15),
-              blurRadius: 30,
-              offset: Offset(0, 15),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Enhanced Header
-            Container(
-              padding: EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors:
-                      isEnrolled
-                          ? [Color(0xFF1B5E20), Color(0xFF2E7D32)]
-                          : [Color(0xFFD32F2F), Color(0xFFC62828)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(28),
-                  topRight: Radius.circular(28),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: (isEnrolled ? Color(0xFF1B5E20) : Color(0xFFD32F2F))
-                        .withOpacity(0.3),
-                    blurRadius: 12,
-                    offset: Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 64,
-                        height: 64,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
-                              blurRadius: 8,
-                              offset: Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Icon(
-                          isEnrolled ? Icons.verified_user : Icons.warning,
-                          color: Colors.white,
-                          size: 32,
-                        ),
-                      ),
-                      SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              record['studentName'] ?? 'Unknown Student',
-                              style: TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                            SizedBox(height: 4),
-                            Row(
-                              children: [
-                                Container(
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    'Roll: ${record['rollNumber']}',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                                SizedBox(width: 8),
-                                Container(
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    isEnrolled ? 'ENROLLED' : 'ABSENTEE',
-                                    style: TextStyle(
-                                      color:
-                                          isEnrolled
-                                              ? Color(0xFF1B5E20)
-                                              : Color(0xFFD32F2F),
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: IconButton(
-                          icon: Icon(
-                            Icons.close,
-                            color: Colors.white,
-                            size: 24,
-                          ),
-                          onPressed: () => Navigator.of(context).pop(),
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 16),
-                  // Quick Status Bar
-                  Container(
-                    padding: EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.white.withOpacity(0.2)),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: _buildQuickStat(
-                            Icons.assignment,
-                            'Session',
-                            record['subject'] ?? 'N/A',
-                          ),
-                        ),
-                        Container(
-                          width: 1,
-                          height: 40,
-                          color: Colors.white.withOpacity(0.3),
-                        ),
-                        Expanded(
-                          child: _buildQuickStat(
-                            Icons.location_on,
-                            'Location',
-                            record['roomOrLocation'] ?? 'N/A',
-                          ),
-                        ),
-                        Container(
-                          width: 1,
-                          height: 40,
-                          color: Colors.white.withOpacity(0.3),
-                        ),
-                        Expanded(
-                          child: _buildQuickStat(
-                            Icons.schedule,
-                            'Status',
-                            record['status']?.toUpperCase() ?? 'N/A',
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Enhanced Content
-            Expanded(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildEnhancedDetailSection(
-                      'Student Information',
-                      Icons.person,
-                      Color(0xFF1976D2),
-                      [
-                        _buildEnhancedDetailRow(
-                          'Email',
-                          record['studentEmail'],
-                        ),
-                        _buildEnhancedDetailRow(
-                          'Department',
-                          record['department'],
-                        ),
-                        _buildEnhancedDetailRow('Group', record['groupName']),
-                        _buildEnhancedDetailRow('Campus', record['campus']),
-                      ],
-                    ),
-
-                    _buildEnhancedDetailSection(
-                      'Session Information',
-                      Icons.class_,
-                      Color(0xFF2E7D32),
-                      [
-                        _buildEnhancedDetailRow(
-                          'Session ID',
-                          record['sessionId'],
-                        ),
-                        _buildEnhancedDetailRow('Subject', record['subject']),
-                        _buildEnhancedDetailRow(
-                          'Period',
-                          '${record['period'] ?? 'N/A'}',
-                        ),
-                        _buildEnhancedDetailRow('Day', record['day']),
-                      ],
-                    ),
-
-                    _buildEnhancedDetailSection(
-                      'Timing Information',
-                      Icons.access_time,
-                      Color(0xFFE65100),
-                      [
-                        _buildEnhancedDetailRow(
-                          'Check-in Time',
-                          checkInTime != null
-                              ? _formatDateTime(checkInTime)
-                              : 'N/A',
-                        ),
-                        _buildEnhancedDetailRow(
-                          'Check-out Time',
-                          checkOutTime != null
-                              ? _formatDateTime(checkOutTime)
-                              : 'N/A',
-                        ),
-                        _buildEnhancedDetailRow(
-                          'Expected End',
-                          expectedEndTime != null
-                              ? _formatDateTime(expectedEndTime)
-                              : 'N/A',
-                        ),
-                        _buildEnhancedDetailRow(
-                          'Duration',
-                          record['durationMinutes'] != null
-                              ? '${record['durationMinutes'].toInt()} minutes'
-                              : 'N/A',
-                        ),
-                        if (record['closeReason'] != null)
-                          _buildEnhancedDetailRow(
-                            'Close Reason',
-                            record['closeReason'],
-                          ),
-                      ],
-                    ),
-
-                    if (record['checkInLat'] != null &&
-                        record['checkInLng'] != null)
-                      _buildEnhancedDetailSection(
-                        'Location Information',
-                        Icons.location_on,
-                        Color(0xFF7B1FA2),
-                        [
-                          _buildEnhancedDetailRow(
-                            'Check-in Coordinates',
-                            '${record['checkInLat']?.toStringAsFixed(6)}, ${record['checkInLng']?.toStringAsFixed(6)}',
-                          ),
-                          if (record['checkOutLat'] != null &&
-                              record['checkOutLng'] != null)
-                            _buildEnhancedDetailRow(
-                              'Check-out Coordinates',
-                              '${record['checkOutLat']?.toStringAsFixed(6)}, ${record['checkOutLng']?.toStringAsFixed(6)}',
-                            ),
-                        ],
-                      ),
-
-                    if (record['logs'] != null &&
-                        (record['logs'] as List).isNotEmpty)
-                      _buildEnhancedDetailSection(
-                        'Activity Logs',
-                        Icons.list_alt,
-                        Color(0xFF455A64),
-                        [
-                          Container(
-                            width: double.infinity,
-                            padding: EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  Color(0xFF455A64).withOpacity(0.05),
-                                  Color(0xFF455A64).withOpacity(0.1),
-                                ],
-                              ),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: Color(0xFF455A64).withOpacity(0.2),
-                              ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Icon(
-                                      Icons.terminal,
-                                      size: 20,
-                                      color: Color(0xFF455A64),
-                                    ),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      'System Logs',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.bold,
-                                        color: Color(0xFF455A64),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                SizedBox(height: 12),
-                                Container(
-                                  padding: EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey[50],
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children:
-                                        (record['logs'] as List)
-                                            .map<Widget>(
-                                              (log) => Padding(
-                                                padding: EdgeInsets.symmetric(
-                                                  vertical: 2,
-                                                ),
-                                                child: Row(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    Container(
-                                                      margin: EdgeInsets.only(
-                                                        top: 6,
-                                                      ),
-                                                      width: 6,
-                                                      height: 6,
-                                                      decoration: BoxDecoration(
-                                                        color: Color(
-                                                          0xFF455A64,
-                                                        ),
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              3,
-                                                            ),
-                                                      ),
-                                                    ),
-                                                    SizedBox(width: 8),
-                                                    Expanded(
-                                                      child: Text(
-                                                        log.toString(),
-                                                        style: TextStyle(
-                                                          fontSize: 13,
-                                                          fontFamily:
-                                                              'monospace',
-                                                          color:
-                                                              Colors.grey[700],
-                                                          height: 1.4,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            )
-                                            .toList(),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                  ],
-                ),
-              ),
-            ),
-
-            // Enhanced Footer
-            Container(
-              padding: EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.grey[50],
-                borderRadius: BorderRadius.only(
-                  bottomLeft: Radius.circular(28),
-                  bottomRight: Radius.circular(28),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color:
-                          isCompleted
-                              ? Color(0xFF2E7D32).withOpacity(0.1)
-                              : Color(0xFFE65100).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      isCompleted ? Icons.check_circle : Icons.schedule,
-                      color:
-                          isCompleted ? Color(0xFF2E7D32) : Color(0xFFE65100),
-                      size: 20,
-                    ),
-                  ),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          isCompleted ? 'Session Completed' : 'Session Ongoing',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.grey[800],
-                          ),
-                        ),
-                        if (record['durationMinutes'] != null)
-                          Text(
-                            'Duration: ${record['durationMinutes'].toInt()} minutes',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Color(0xFF1B5E20), Color(0xFF2E7D32)],
-                      ),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      'Details View',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildQuickStat(IconData icon, String label, String value) {
-    return Column(
-      children: [
-        Icon(icon, color: Colors.white, size: 20),
-        SizedBox(height: 4),
-        Text(
-          label,
-          style: TextStyle(
-            color: Colors.white70,
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        SizedBox(height: 2),
-        Text(
-          value,
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-          ),
-          textAlign: TextAlign.center,
-          overflow: TextOverflow.ellipsis,
-          maxLines: 1,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildEnhancedDetailSection(
-    String title,
-    IconData icon,
-    Color accentColor,
-    List<Widget> children,
-  ) {
-    return Container(
-      margin: EdgeInsets.only(bottom: 24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 15,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [accentColor, accentColor.withOpacity(0.8)],
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: accentColor.withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Icon(icon, color: Colors.white, size: 20),
-                ),
-                SizedBox(width: 12),
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: accentColor,
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: 16),
-            Container(
-              padding: EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: accentColor.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: accentColor.withOpacity(0.1)),
-              ),
-              child: Column(children: children),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEnhancedDetailRow(String label, String? value) {
-    return Container(
-      padding: EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: Colors.grey.withOpacity(0.1), width: 1),
-        ),
-      ),
+    return Padding(
+      padding: EdgeInsets.only(bottom: 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 120,
+            width: 80,
             child: Text(
               '$label:',
               style: TextStyle(
+                fontSize: 14,
                 fontWeight: FontWeight.w600,
                 color: Colors.grey[700],
-                fontSize: 14,
               ),
             ),
           ),
-          SizedBox(width: 12),
           Expanded(
-            child: Container(
-              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color:
-                    value?.isNotEmpty == true
-                        ? Colors.grey[50]
-                        : Colors.grey[100],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                value ?? 'N/A',
-                style: TextStyle(
-                  color:
-                      value?.isNotEmpty == true
-                          ? Colors.black87
-                          : Colors.grey[500],
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
+            child: Text(
+              value.toString(),
+              style: TextStyle(fontSize: 14, color: Colors.grey[800]),
             ),
           ),
         ],
@@ -3690,7 +3499,76 @@ class StudentDetailsDialog extends StatelessWidget {
     );
   }
 
-  String _formatDateTime(DateTime dateTime) {
-    return '${dateTime.day.toString().padLeft(2, '0')}-${dateTime.month.toString().padLeft(2, '0')}-${dateTime.year} ${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+  Widget _buildAttendanceStatCard(
+    String title,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
+    return Container(
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 20),
+          SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          Text(
+            title,
+            style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.day.toString().padLeft(2, '0')}-${date.month.toString().padLeft(2, '0')}-${date.year}';
+  }
+
+  // Search functionality methods
+  void _onSearchChanged(String query) {
+    setState(() {
+      _searchQuery = query.toLowerCase();
+    });
+  }
+
+  void _clearSearch() {
+    setState(() {
+      _searchController.clear();
+      _searchQuery = '';
+    });
+  }
+
+  List<Map<String, dynamic>> _filterStudents(
+    List<Map<String, dynamic>> students,
+  ) {
+    if (_searchQuery.isEmpty) {
+      return students;
+    }
+
+    return students.where((student) {
+      final name = (student['name'] ?? '').toString().toLowerCase();
+      final rollNumber = (student['rollNumber'] ?? '').toString().toLowerCase();
+      final email = (student['email'] ?? '').toString().toLowerCase();
+      final department = (student['department'] ?? '').toString().toLowerCase();
+
+      return name.contains(_searchQuery) ||
+          rollNumber.contains(_searchQuery) ||
+          email.contains(_searchQuery) ||
+          department.contains(_searchQuery);
+    }).toList();
   }
 }
