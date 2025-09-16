@@ -5,12 +5,16 @@ class SessionManager {
   // Keys for storing session data
   static const String _keyIsLoggedIn = 'isLoggedIn';
   static const String _keyIsAdmin = 'isAdmin';
+  static const String _keyIsTeacher = 'isTeacher';
   static const String _keyUserName = 'userName';
   static const String _keyUserEmail = 'userEmail';
   static const String _keyRollNumber = 'rollNumber';
   static const String _keyGroupId = 'groupId';
   static const String _keyGroupName = 'groupName';
   static const String _keyDepartment = 'department';
+  static const String _keyTeacherId = 'teacherId';
+  static const String _keyTeacherSubjects = 'teacherSubjects';
+  static const String _keyDesignation = 'designation';
   static const String _keyLoginTime = 'loginTime';
   static const String _keyLastActivity = 'lastActivity';
 
@@ -25,6 +29,10 @@ class SessionManager {
     String groupId = '',
     String groupName = '',
     String department = '',
+    bool isTeacher = false,
+    String teacherId = '',
+    List<String> teacherSubjects = const [],
+    String designation = '',
   }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -34,12 +42,16 @@ class SessionManager {
       await Future.wait([
         prefs.setBool(_keyIsLoggedIn, isLoggedIn),
         prefs.setBool(_keyIsAdmin, isAdmin),
+        prefs.setBool(_keyIsTeacher, isTeacher),
         prefs.setString(_keyUserName, userName),
         prefs.setString(_keyUserEmail, userEmail),
         prefs.setString(_keyRollNumber, rollNumber),
         prefs.setString(_keyGroupId, groupId),
         prefs.setString(_keyGroupName, groupName),
         prefs.setString(_keyDepartment, department),
+        prefs.setString(_keyTeacherId, teacherId),
+        prefs.setStringList(_keyTeacherSubjects, teacherSubjects),
+        prefs.setString(_keyDesignation, designation),
         prefs.setString(_keyLoginTime, currentTime),
         prefs.setString(_keyLastActivity, currentTime),
       ]);
@@ -60,12 +72,16 @@ class SessionManager {
       final sessionData = {
         'isLoggedIn': prefs.getBool(_keyIsLoggedIn) ?? false,
         'isAdmin': prefs.getBool(_keyIsAdmin) ?? false,
+        'isTeacher': prefs.getBool(_keyIsTeacher) ?? false,
         'userName': prefs.getString(_keyUserName) ?? '',
         'userEmail': prefs.getString(_keyUserEmail) ?? '',
         'rollNumber': prefs.getString(_keyRollNumber) ?? '',
         'groupId': prefs.getString(_keyGroupId) ?? '',
         'groupName': prefs.getString(_keyGroupName) ?? '',
         'department': prefs.getString(_keyDepartment) ?? '',
+        'teacherId': prefs.getString(_keyTeacherId) ?? '',
+        'teacherSubjects': prefs.getStringList(_keyTeacherSubjects) ?? [],
+        'designation': prefs.getString(_keyDesignation) ?? '',
         'loginTime': prefs.getString(_keyLoginTime) ?? '',
         'lastActivity': prefs.getString(_keyLastActivity) ?? '',
       };
@@ -345,15 +361,16 @@ class SessionManager {
 
   /// Check if session has expired based on inactivity
   /// Sessions expire after 24 hours of inactivity by default
- static Future<bool> isSessionExpired({Duration? maxInactivity}) async {
+  static Future<bool> isSessionExpired({Duration? maxInactivity}) async {
     try {
       final lastActivity = await getLastActivity();
       if (lastActivity == null) return true;
-      
-      final inactivityDuration = maxInactivity ?? const Duration(days: 7); // Changed from 24 hours
+
+      final inactivityDuration =
+          maxInactivity ?? const Duration(days: 7); // Changed from 24 hours
       final now = DateTime.now();
       final timeSinceLastActivity = now.difference(lastActivity);
-      
+
       return timeSinceLastActivity > inactivityDuration;
     } catch (e) {
       debugPrint('Error checking session expiry: $e');
@@ -377,44 +394,46 @@ class SessionManager {
 
   /// Validate current session integrity
   /// Checks if all required session data is present and valid
-    static Future<bool> validateSession() async {
+  static Future<bool> validateSession() async {
     try {
       final session = await getSession();
-      
+
       // Check if user is marked as logged in
       if (session['isLoggedIn'] != true) {
         debugPrint('Session validation failed: User not logged in');
         return false;
       }
-      
+
       // Check if essential user data is present
       final userName = session['userName'] as String;
       final userEmail = session['userEmail'] as String;
-      
+
       if (userName.isEmpty || userEmail.isEmpty) {
         debugPrint('Session validation failed: Missing essential user data');
         await clearSession(); // Clear invalid session
         return false;
       }
-      
+
       // Check if session has expired
       if (await isSessionExpired()) {
         debugPrint('Session validation failed: Session expired');
         await clearSession(); // Clear expired session
         return false;
       }
-      
+
       // For students, roll number validation is optional
       // Don't clear session for missing roll number, just log it
       final isAdmin = session['isAdmin'] as bool;
       if (!isAdmin) {
         final rollNumber = session['rollNumber'] as String;
         if (rollNumber.isEmpty) {
-          debugPrint('Warning: Student session missing roll number, but continuing...');
+          debugPrint(
+            'Warning: Student session missing roll number, but continuing...',
+          );
           // Don't return false here - roll number might be optional
         }
       }
-      
+
       debugPrint('Session validation successful');
       return true;
     } catch (e) {
@@ -422,6 +441,7 @@ class SessionManager {
       return false;
     }
   }
+
   /// Get formatted session info for debugging
   static Future<String> getSessionInfo() async {
     try {

@@ -449,13 +449,13 @@ class _TeachersScreenState extends State<TeachersScreen> {
   // Improved header with better text contrast
   Widget _buildHeader() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 50, 20, 24),
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 16), // reduced
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            const Color(0xFF2E7D32), // Darker green for better contrast
+            const Color(0xFF2E7D32),
             const Color(0xFF4CAF50),
             const Color(0xFF66BB6A),
           ],
@@ -479,22 +479,18 @@ class _TeachersScreenState extends State<TeachersScreen> {
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(14),
+                  padding: const EdgeInsets.all(12), // smaller icon padding
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.25),
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.4),
-                      width: 1.5,
-                    ),
+                    borderRadius: BorderRadius.circular(16),
                   ),
                   child: const Icon(
                     Icons.school_rounded,
                     color: Colors.white,
-                    size: 30,
-                  ),
+                    size: 26,
+                  ), // smaller icon
                 ),
-                const SizedBox(width: 18),
+                const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -503,193 +499,91 @@ class _TeachersScreenState extends State<TeachersScreen> {
                         'Teachers Management',
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: 26,
+                          fontSize: 22, // smaller
                           fontWeight: FontWeight.bold,
-                          letterSpacing: 0.5,
-                          shadows: [
-                            Shadow(
-                              offset: Offset(0, 1),
-                              blurRadius: 2,
-                              color: Colors.black26,
-                            ),
-                          ],
                         ),
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 4),
                       Text(
                         'Manage faculty and their subjects',
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.95),
-                          fontSize: 16,
-                          letterSpacing: 0.3,
+                          color: Colors.white.withOpacity(0.9),
+                          fontSize: 14, // smaller
                           fontWeight: FontWeight.w500,
-                          shadows: const [
-                            Shadow(
-                              offset: Offset(0, 1),
-                              blurRadius: 1,
-                              color: Colors.black26,
-                            ),
-                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.25),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.3),
-                      width: 1,
-                    ),
-                  ),
-                  child: Text(
-                    '${_teachers.length}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                      shadows: [
-                        Shadow(
-                          offset: Offset(0, 1),
-                          blurRadius: 1,
-                          color: Colors.black26,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
               ],
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 16), // reduced space
             Row(
               children: [
                 Expanded(
-                  child: Container(
-                    height: 54,
-                    decoration: BoxDecoration(
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.15),
-                          offset: const Offset(0, 4),
-                          blurRadius: 12,
-                        ),
-                      ],
-                    ),
-                    child: ElevatedButton.icon(
-                      onPressed: _showAddTeacherDialog,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: const Color(0xFF2E7D32),
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
+                  child: ElevatedButton.icon(
+                    onPressed: _showAddTeacherDialog,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF2E7D32),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
                       ),
-                      icon: const Icon(Icons.person_add_rounded, size: 22),
-                      label: const Flexible(
-                        child: Text(
-                          'Add Teacher',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
-                            letterSpacing: 0.1,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                    ),
+                    icon: const Icon(Icons.person_add_rounded, size: 20),
+                    label: const Text(
+                      'Add Teacher',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 12),
                 Expanded(
-                  child: Container(
-                    height: 54,
-                    decoration: BoxDecoration(
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          offset: const Offset(0, 2),
-                          blurRadius: 8,
-                        ),
-                      ],
-                    ),
-                    child: ElevatedButton.icon(
-                      onPressed: _showBulkUploadDialog,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white.withOpacity(0.25),
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          side: BorderSide(
-                            color: Colors.white.withOpacity(0.4),
-                            width: 1.5,
-                          ),
-                        ),
+                  child: ElevatedButton.icon(
+                    onPressed: _showBulkUploadDialog,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white.withOpacity(0.25),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
                       ),
-                      icon: const Icon(Icons.upload_file_rounded, size: 22),
-                      label: const Flexible(
-                        child: Text(
-                          'Bulk Upload',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
-                            letterSpacing: 0.1,
-                            shadows: [
-                              Shadow(
-                                offset: Offset(0, 1),
-                                blurRadius: 1,
-                                color: Colors.black26,
-                              ),
-                            ],
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                    ),
+                    icon: const Icon(Icons.upload_file_rounded, size: 20),
+                    label: const Text(
+                      'Bulk Upload',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 12), // reduced
             Container(
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.25),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: Colors.white.withOpacity(0.3),
-                  width: 1.5,
-                ),
               ),
               child: TextField(
                 onChanged: (value) => setState(() => _searchQuery = value),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
+                style: const TextStyle(color: Colors.white, fontSize: 14),
                 decoration: InputDecoration(
-                  hintText: 'Search teachers by name, email, or department...',
-                  hintStyle: TextStyle(
-                    color: Colors.white.withOpacity(0.8),
-                    fontSize: 16,
-                    fontWeight: FontWeight.w400,
-                  ),
+                  hintText: 'Search teachers...',
+                  hintStyle: TextStyle(color: Colors.white.withOpacity(0.8)),
                   prefixIcon: Icon(
                     Icons.search_rounded,
                     color: Colors.white.withOpacity(0.9),
-                    size: 24,
+                    size: 22,
                   ),
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 16,
+                    horizontal: 16,
+                    vertical: 12,
                   ),
                 ),
               ),
@@ -940,8 +834,10 @@ class _AddTeacherDialogState extends State<AddTeacherDialog> {
   final _specializationController = TextEditingController();
   final _joiningDateController = TextEditingController();
   final _experienceController = TextEditingController();
+  final _passwordController = TextEditingController();
 
   bool _isLoading = false;
+  bool _obscurePassword = true;
 
   @override
   void initState() {
@@ -956,6 +852,7 @@ class _AddTeacherDialogState extends State<AddTeacherDialog> {
       _specializationController.text = widget.teacher!['specialization'] ?? '';
       _joiningDateController.text = widget.teacher!['joiningDate'] ?? '';
       _experienceController.text = widget.teacher!['experience'] ?? '';
+      _passwordController.text = widget.teacher!['password'] ?? '';
     }
   }
 
@@ -1094,6 +991,8 @@ class _AddTeacherDialogState extends State<AddTeacherDialog> {
               return null;
             },
           ),
+          const SizedBox(height: 16),
+          _buildPasswordField(),
 
           const SizedBox(height: 32),
           _buildSectionHeader(
@@ -1283,6 +1182,110 @@ class _AddTeacherDialogState extends State<AddTeacherDialog> {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(icon, color: const Color(0xFF4CAF50), size: 20),
+              ),
+              filled: true,
+              fillColor: Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide(color: Colors.grey[200]!, width: 1.5),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide(color: Colors.grey[200]!, width: 1.5),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: const BorderSide(
+                  color: Color(0xFF4CAF50),
+                  width: 2,
+                ),
+              ),
+              errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: const BorderSide(color: Colors.red, width: 1.5),
+              ),
+              focusedErrorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: const BorderSide(color: Colors.red, width: 2),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 20,
+                vertical: 16,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPasswordField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        RichText(
+          text: TextSpan(
+            text: 'Password',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: Colors.grey[700],
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                offset: const Offset(0, 2),
+                blurRadius: 8,
+                spreadRadius: 0,
+              ),
+            ],
+          ),
+          child: TextFormField(
+            controller: _passwordController,
+            obscureText: _obscurePassword,
+            validator: (value) {
+              if (value != null && value.isNotEmpty && value.length < 6) {
+                return 'Password must be at least 6 characters';
+              }
+              return null;
+            },
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+            decoration: InputDecoration(
+              hintText: 'Enter password for teacher login (optional)',
+              hintStyle: TextStyle(
+                color: Colors.grey[400],
+                fontSize: 14,
+                fontWeight: FontWeight.w400,
+              ),
+              prefixIcon: Container(
+                margin: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF4CAF50).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.lock_outline,
+                  color: Color(0xFF4CAF50),
+                  size: 20,
+                ),
+              ),
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                  color: Colors.grey[600],
+                ),
+                onPressed: () {
+                  setState(() {
+                    _obscurePassword = !_obscurePassword;
+                  });
+                },
               ),
               filled: true,
               fillColor: Colors.white,
@@ -1515,26 +1518,45 @@ class _AddTeacherDialogState extends State<AddTeacherDialog> {
         'updatedAt': FieldValue.serverTimestamp(),
       };
 
+      // Only include password if it's not empty
+      final passwordText = _passwordController.text.trim();
+      if (passwordText.isNotEmpty) {
+        teacherData['password'] = passwordText;
+      }
+
       if (widget.teacher != null) {
+        // Updating existing teacher
         await FirebaseFirestore.instance
             .collection('teachers')
             .doc(widget.teacher!['id'])
-            .update(teacherData);
-        _showSuccessSnackBar('Teacher updated successfully');
+            .update(teacherData)
+            .timeout(const Duration(seconds: 30));
+        if (mounted) {
+          _showSuccessSnackBar('Teacher updated successfully');
+          Navigator.pop(context);
+          widget.onTeacherAdded();
+        }
       } else {
+        // Adding new teacher
         teacherData['createdAt'] = FieldValue.serverTimestamp();
         await FirebaseFirestore.instance
             .collection('teachers')
-            .add(teacherData);
-        _showSuccessSnackBar('Teacher added successfully');
+            .add(teacherData)
+            .timeout(const Duration(seconds: 30));
+        if (mounted) {
+          _showSuccessSnackBar('Teacher added successfully');
+          Navigator.pop(context);
+          widget.onTeacherAdded();
+        }
       }
-
-      Navigator.pop(context);
-      widget.onTeacherAdded();
     } catch (e) {
-      _showErrorSnackBar('Error saving teacher: $e');
+      if (mounted) {
+        _showErrorSnackBar('Error saving teacher: $e');
+      }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -1564,6 +1586,7 @@ class _AddTeacherDialogState extends State<AddTeacherDialog> {
     _specializationController.dispose();
     _joiningDateController.dispose();
     _experienceController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 }
@@ -1668,7 +1691,7 @@ class _BulkUploadDialogState extends State<BulkUploadDialog> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Expected format: Name, Email, Phone, Designation, Department, Qualification, Specialization, Joining Date, Experience\n\nNote: Subjects should be added individually after importing teachers using the "Manage Subjects" option.',
+            'Expected format: Name, Email, Phone, Designation, Department, Qualification, Specialization, Joining Date, Experience, Password (optional)\n\nNote: If password is not provided, default password "teacher123" will be assigned. Subjects should be added individually after importing teachers using the "Manage Subjects" option.',
             style: TextStyle(fontSize: 12, color: Colors.grey[600]),
             textAlign: TextAlign.center,
           ),
@@ -1954,7 +1977,7 @@ class _BulkUploadDialogState extends State<BulkUploadDialog> {
 
     if (_parsedData == null || _parsedData!.length < 2) {
       _showErrorSnackBar(
-        'No valid data to upload. Expected format: Name, Email, Phone, Designation, Department, Qualification, Specialization, Joining Date, Experience',
+        'No valid data to upload. Expected format: Name, Email, Phone, Designation, Department, Qualification, Specialization, Joining Date, Experience, Password (optional)',
       );
       return;
     }
@@ -1986,6 +2009,10 @@ class _BulkUploadDialogState extends State<BulkUploadDialog> {
             'joiningDate':
                 row.length > 7 ? row[7]?.toString().trim() ?? '' : '',
             'experience': row.length > 8 ? row[8]?.toString().trim() ?? '' : '',
+            'password':
+                row.length > 9
+                    ? row[9]?.toString().trim() ?? ''
+                    : 'teacher123', // Default password if not provided
             'subjects': [],
             'createdAt': FieldValue.serverTimestamp(),
           };
@@ -2124,6 +2151,7 @@ class TeacherDetailsDialog extends StatelessWidget {
             _buildDetailRow('Specialization', teacher['specialization']),
             _buildDetailRow('Date of Joining', teacher['joiningDate']),
             _buildDetailRow('Experience', teacher['experience']),
+            _buildPasswordRow('Password', teacher['password']),
             if (subjects.isNotEmpty) ...[
               const SizedBox(height: 16),
               const Text(
@@ -2182,6 +2210,60 @@ class TeacherDetailsDialog extends StatelessWidget {
           ),
           Expanded(
             child: Text(value, style: TextStyle(color: Colors.grey[700])),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPasswordRow(String label, String? value) {
+    if (value == null || value.isEmpty) return const SizedBox();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              '$label:',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+          Expanded(
+            child: Row(
+              children: [
+                Text(
+                  '•' * 8, // Show masked password
+                  style: TextStyle(
+                    color: Colors.grey[700],
+                    fontSize: 16,
+                    letterSpacing: 2,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.green[50],
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: Colors.green[200]!),
+                  ),
+                  child: Text(
+                    'Set',
+                    style: TextStyle(
+                      color: Colors.green[700],
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),

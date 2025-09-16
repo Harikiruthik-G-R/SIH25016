@@ -2,6 +2,7 @@ import 'package:GeoAt/admin/admin_home.dart';
 import 'package:GeoAt/sessionmanager.dart';
 import 'package:GeoAt/users/users_home.dart';
 import 'package:GeoAt/users/group_selection.dart';
+import 'package:GeoAt/faculty/teacherDashboard.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:io';
@@ -508,6 +509,19 @@ class MyApp extends StatelessWidget {
                     groupId: args['groupId'] ?? '',
                     groupName: args['groupName'] ?? '',
                     department: args['department'] ?? '',
+                  ),
+            );
+          case '/teacherDashboard':
+            final args = settings.arguments as Map<String, dynamic>? ?? {};
+            return MaterialPageRoute(
+              builder:
+                  (context) => TeacherDashboard(
+                    teacherId: args['teacherId'] ?? '',
+                    teacherName: args['name'] ?? 'Teacher',
+                    teacherEmail: args['email'] ?? 'teacher@example.com',
+                    subjects: List<String>.from(args['subjects'] ?? []),
+                    department: args['department'] ?? '',
+                    designation: args['designation'] ?? '',
                   ),
             );
           default:
@@ -1100,7 +1114,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   late AnimationController _animationController;
   final _formKey = GlobalKey<FormState>();
   String selectedRole = 'Admin';
-  final List<String> roles = ['Admin', 'Student'];
+  final List<String> roles = ['Admin', 'Student', 'Teacher'];
 
   @override
   void initState() {
@@ -1142,8 +1156,11 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       if (selectedRole == 'Admin') {
         debugPrint("🔧 Attempting admin login...");
         await _loginAdmin(loginValue, password);
+      } else if (selectedRole == 'Teacher') {
+        debugPrint("👩‍🏫 Attempting teacher login...");
+        await _loginTeacher(loginValue, password);
       } else {
-        debugPrint("👨‍� Attempting student login...");
+        debugPrint("👨‍🎓 Attempting student login...");
         // just send password, no extra args
         await _loginStudent(loginValue, password);
       }
@@ -1201,6 +1218,70 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
         'isAdmin': true,
         'name': data['name'],
         'email': data['email'],
+      },
+    );
+  }
+
+  Future<void> _loginTeacher(String email, String password) async {
+    final querySnapshot = await FirebaseFirestore.instance
+        .collection('teachers')
+        .where('email', isEqualTo: email)
+        .limit(1)
+        .get()
+        .timeout(const Duration(seconds: 15));
+
+    if (querySnapshot.docs.isEmpty) {
+      throw Exception("Invalid teacher credentials. Please check your email.");
+    }
+
+    final data = querySnapshot.docs.first.data();
+    final storedPassword = (data['password'] ?? '').toString();
+
+    if (storedPassword.isEmpty) {
+      throw Exception(
+        "Password not set for this teacher. Please contact admin.",
+      );
+    }
+
+    if (storedPassword != password) {
+      throw Exception("Invalid credentials. Please check your password.");
+    }
+
+    // Save teacher session
+    final subjects = data['subjects'] as List<dynamic>? ?? [];
+    final subjectNames =
+        subjects.map((subject) {
+          if (subject is String) {
+            return subject;
+          } else if (subject is Map && subject['name'] != null) {
+            return subject['name'].toString();
+          }
+          return subject.toString();
+        }).toList();
+
+    await SessionManager.saveSession(
+      isLoggedIn: true,
+      isAdmin: false,
+      isTeacher: true,
+      userName: (data['name'] ?? '').toString(),
+      userEmail: (data['email'] ?? '').toString(),
+      teacherId: querySnapshot.docs.first.id,
+      teacherSubjects: subjectNames.cast<String>(),
+      department: (data['department'] ?? '').toString(),
+      designation: (data['designation'] ?? '').toString(),
+    );
+
+    if (!mounted) return;
+    Navigator.pushNamed(
+      context,
+      '/teacherDashboard',
+      arguments: {
+        'teacherId': querySnapshot.docs.first.id,
+        'name': data['name'],
+        'email': data['email'],
+        'subjects': subjectNames,
+        'department': data['department'] ?? '',
+        'designation': data['designation'] ?? '',
       },
     );
   }
