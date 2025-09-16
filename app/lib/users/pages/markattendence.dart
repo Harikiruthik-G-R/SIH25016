@@ -1,16 +1,18 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
-
+import 'package:geolocator/geolocator.dart' as geo;
+import 'package:location/location.dart' as loc;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
 // Background service (hooks – optional but supported)
 import 'package:flutter_background_service/flutter_background_service.dart';
+
+import 'location_validation_service.dart';
 
 class MarkAttendanceScreen extends StatefulWidget {
   final String userName;
@@ -955,123 +957,273 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
   // --------------------------
 
   // IMPROVED: Better error handling and multiple fallback strategies
-  Future<Position?> _getPositionOrAsk() async {
-    try {
-      _log("Checking location service availability...");
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        _log("Location services are disabled.");
+Future<geo.Position?> _getPositionOrAsk() async {
+  try {
+    _log("Checking location service availability...");
+    bool serviceEnabled = await geo.Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      _log("Location services are disabled.");
+      return null;
+    }
+
+    _log("Checking location permissions...");
+    geo.LocationPermission permission = await geo.Geolocator.checkPermission();
+    _log("Current permission status: $permission");
+
+    if (permission == geo.LocationPermission.deniedForever) {
+      _log("Location permissions are permanently denied.");
+      return null;
+    }
+
+    if (permission == geo.LocationPermission.denied) {
+      _log("Requesting location permission...");
+      permission = await geo.Geolocator.requestPermission();
+      _log("Permission request result: $permission");
+
+      if (permission != geo.LocationPermission.always &&
+          permission != geo.LocationPermission.whileInUse) {
+        _log("Location permission not granted.");
         return null;
       }
-
-      _log("Checking location permissions...");
-      LocationPermission permission = await Geolocator.checkPermission();
-      _log("Current permission status: $permission");
-
-      if (permission == LocationPermission.deniedForever) {
-        _log("Location permissions are permanently denied.");
-        return null;
-      }
-
-      if (permission == LocationPermission.denied) {
-        _log("Requesting location permission...");
-        permission = await Geolocator.requestPermission();
-        _log("Permission request result: $permission");
-
-        if (permission != LocationPermission.always &&
-            permission != LocationPermission.whileInUse) {
-          _log("Location permission not granted.");
-          return null;
-        }
-      }
-
-      // Try multiple strategies to get location
-      Position? position;
-
-      // Strategy 1: High accuracy with longer timeout
-      try {
-        _log("Attempting high accuracy location...");
-        position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high,
-          timeLimit: const Duration(seconds: 15),
-        );
-        _log(
-          "High accuracy position obtained: ${position.latitude}, ${position.longitude}",
-        );
-        return position;
-      } catch (e) {
-        _log("High accuracy failed: $e");
-      }
-
-      // Strategy 2: Medium accuracy with shorter timeout
-      try {
-        _log("Attempting medium accuracy location...");
-        position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.medium,
-          timeLimit: const Duration(seconds: 10),
-        );
-        _log(
-          "Medium accuracy position obtained: ${position.latitude}, ${position.longitude}",
-        );
-        return position;
-      } catch (e) {
-        _log("Medium accuracy failed: $e");
-      }
-
-      // Strategy 3: Low accuracy, fastest response
-      try {
-        _log("Attempting low accuracy location...");
-        position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.low,
-          timeLimit: const Duration(seconds: 8),
-        );
-        _log(
-          "Low accuracy position obtained: ${position.latitude}, ${position.longitude}",
-        );
-        return position;
-      } catch (e) {
-        _log("Low accuracy failed: $e");
-      }
-
-      // Strategy 4: Try to get last known position
-      try {
-        _log("Attempting to get last known position...");
-        position = await Geolocator.getLastKnownPosition();
-        if (position != null) {
-          _log(
-            "Last known position obtained: ${position.latitude}, ${position.longitude}",
-          );
-          return position;
-        }
-      } catch (e) {
-        _log("Last known position failed: $e");
-      }
-
-      _log("All location strategies failed.");
-      return null;
-    } catch (e) {
-      _log("Error in location process: $e");
-      return null;
     }
-  }
 
-  Future<Position?> _safePosition() async {
+    // NEW: Use location package for mock detection
+    loc.Location location = loc.Location();
+    loc.LocationData? locationData;
+
+    // Try multiple strategies to get location with mock detection
+    geo.Position? position;
+
+    // Strategy 1: High accuracy with mock detection
     try {
-      return await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.medium,
-      ).timeout(const Duration(seconds: 6));
+      _log("Attempting high accuracy location with mock detection...");
+      locationData = await location.getLocation();
+      
+      // NEW: Validate location for mocking
+      final validationResult = await LocationValidationService.validateLocation(locationData);
+      if (validationResult['isMocked'] == true) {
+        _log("Mock location detected: ${validationResult['reason']}");
+        // Throw custom exception that calling code can handle
+        throw MockLocationException(validationResult['reason']);
+      }
+      
+      // Convert LocationData to Position for compatibility
+      position = geo.Position(
+        longitude: locationData.longitude!,
+        latitude: locationData.latitude!,
+        timestamp: DateTime.fromMillisecondsSinceEpoch(locationData.time!.toInt()),
+        accuracy: locationData.accuracy!,
+        altitude: locationData.altitude ?? 0.0,
+        altitudeAccuracy: 0.0, // LocationData doesn't have altitudeAccuracy, set default
+        heading: locationData.heading ?? 0.0,
+        headingAccuracy: 0.0, // LocationData doesn't have headingAccuracy, set default
+        speed: locationData.speed ?? 0.0,
+        speedAccuracy: 0.0, // LocationData doesn't have speedAccuracy, set default
+      );
+      
+      _log("High accuracy position obtained: ${position.latitude}, ${position.longitude}");
+      return position;
+    } on MockLocationException {
+      rethrow; // Re-throw mock location exceptions
     } catch (e) {
-      _log("Safe position failed: $e");
-      return null;
+      _log("High accuracy with mock detection failed: $e");
     }
-  }
 
-  _BoundsBox? _firstBoundsContaining(double lat, double lng) {
-    for (final b in _allowedBounds) {
-      if (b.contains(lat, lng)) return b;
+    // Strategy 2: Fallback to Geolocator (less mock detection but still functional)
+    try {
+      _log("Attempting fallback location...");
+      position = await geo.Geolocator.getCurrentPosition(
+        desiredAccuracy: geo.LocationAccuracy.medium,
+        timeLimit: const Duration(seconds: 10),
+      );
+      _log("Fallback position obtained: ${position.latitude}, ${position.longitude}");
+      return position;
+    } catch (e) {
+      _log("Fallback location failed: $e");
     }
+
+    // Strategy 3: Last known position
+    try {
+      _log("Attempting to get last known position...");
+      position = await geo.Geolocator.getLastKnownPosition();
+      if (position != null) {
+        _log("Last known position obtained: ${position.latitude}, ${position.longitude}");
+        return position;
+      }
+    } catch (e) {
+      _log("Last known position failed: $e");
+    }
+
+    _log("All location strategies failed.");
+    return null;
+  } catch (e) {
+    if (e is MockLocationException) {
+      rethrow; // Let mock location exceptions bubble up
+    }
+    _log("Error in location process: $e");
     return null;
   }
+}
+
+// Update your existing _safePosition method to use proper prefixing
+Future<geo.Position?> _safePosition() async {
+  try {
+    return await geo.Geolocator.getCurrentPosition(
+      desiredAccuracy: geo.LocationAccuracy.medium,
+    ).timeout(const Duration(seconds: 6));
+  } catch (e) {
+    _log("Safe position failed: $e");
+    return null;
+  }
+}
+
+// Update the method signature in _firstBoundsContaining if needed
+static const double OUTER_BOX_OFFSET_METERS = 10.0; // Expand inner box by 10m
+static const double CENTER_PROXIMITY_THRESHOLD_METERS = 5.0; // Allow check-in if within 5m of center
+static const double METERS_TO_DEGREES_LAT = 0.000009; // Approx conversion: 1m ≈ 0.000009° latitude
+static const double METERS_TO_DEGREES_LNG = 0.000009; // Simplified - actual depends on latitude
+
+/// Enhanced bounds validation with dual bounding-box system
+_BoundsValidationResult? _validateLocationWithDualGeofence(double userLat, double userLng) {
+  for (final bounds in _allowedBounds) {
+    final result = _checkDualBoundingBox(bounds, userLat, userLng);
+    if (result.isAllowed) {
+      return result;
+    }
+  }
+  return null; // No bounds allow this location
+}
+
+/// Check user location against dual bounding-box system for a single bounds
+_BoundsValidationResult _checkDualBoundingBox(_BoundsBox bounds, double userLat, double userLng) {
+  // Step 1: Check inner rectangle (original bounds)
+  if (_isInsideRectangle(bounds, userLat, userLng)) {
+    _log("Inside inner box ✅ - Location: ($userLat, $userLng)");
+    return _BoundsValidationResult(
+      isAllowed: true,
+      bounds: bounds,
+      zone: 'inner',
+      reason: 'Inside inner rectangle',
+    );
+  }
+
+  // Step 2: Create outer rectangle by expanding inner bounds
+  final outerBounds = _createOuterBounds(bounds);
+  
+  // Step 3: Check if inside outer rectangle
+  if (_isInsideRectangle(outerBounds, userLat, userLng)) {
+    // Step 4: Calculate distance to inner rectangle center
+    final innerCenter = _getRectangleCenter(bounds);
+    final distanceToCenter = _calculateDistance(userLat, userLng, innerCenter.lat, innerCenter.lng);
+    
+    _log("Inside outer box - Distance to center: ${distanceToCenter.toStringAsFixed(2)}m");
+    
+    if (distanceToCenter <= CENTER_PROXIMITY_THRESHOLD_METERS) {
+      _log("Inside outer box but near center ✅ - Distance: ${distanceToCenter.toStringAsFixed(1)}m");
+      return _BoundsValidationResult(
+        isAllowed: true,
+        bounds: bounds,
+        zone: 'outer_near',
+        reason: 'Near center of inner rectangle (${distanceToCenter.toStringAsFixed(1)}m)',
+      );
+    } else {
+      _log("Inside outer box but far ❌ - Distance: ${distanceToCenter.toStringAsFixed(1)}m > ${CENTER_PROXIMITY_THRESHOLD_METERS}m");
+      return _BoundsValidationResult(
+        isAllowed: false,
+        bounds: bounds,
+        zone: 'outer_far',
+        reason: 'Too far from center (${distanceToCenter.toStringAsFixed(1)}m)',
+      );
+    }
+  }
+  
+  _log("Outside outer box ❌ - Location: ($userLat, $userLng)");
+  return _BoundsValidationResult(
+    isAllowed: false,
+    bounds: bounds,
+    zone: 'outside',
+    reason: 'Outside geofence area',
+  );
+}
+
+/// Check if coordinates are inside a rectangle
+bool _isInsideRectangle(_BoundsBox bounds, double lat, double lng) {
+  final minLat = bounds.bottomRightLat;  // bottom-right has smaller latitude
+  final maxLat = bounds.topLeftLat;      // top-left has larger latitude
+  final minLng = bounds.topLeftLng;      // top-left has smaller longitude
+  final maxLng = bounds.bottomRightLng;  // bottom-right has larger longitude
+  
+  return lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng;
+}
+
+/// Create outer bounds by expanding inner bounds by specified meters
+_BoundsBox _createOuterBounds(_BoundsBox innerBounds) {
+  // Convert meter offset to degree offset
+  final latOffset = OUTER_BOX_OFFSET_METERS * METERS_TO_DEGREES_LAT;
+  final lngOffset = OUTER_BOX_OFFSET_METERS * METERS_TO_DEGREES_LNG;
+  
+  // Expand bounds in all directions
+  final outerTopLeftLat = innerBounds.topLeftLat + latOffset;      // Move north
+  final outerTopLeftLng = innerBounds.topLeftLng - lngOffset;      // Move west
+  final outerBottomRightLat = innerBounds.bottomRightLat - latOffset; // Move south
+  final outerBottomRightLng = innerBounds.bottomRightLng + lngOffset; // Move east
+  
+  return _BoundsBox(
+    topLeftLat: outerTopLeftLat,
+    topLeftLng: outerTopLeftLng,
+    bottomRightLat: outerBottomRightLat,
+    bottomRightLng: outerBottomRightLng,
+    campusName: '${innerBounds.campusName}_outer',
+    timetableId: innerBounds.timetableId,
+  );
+}
+
+/// Get center point of a rectangle
+({double lat, double lng}) _getRectangleCenter(_BoundsBox bounds) {
+  final centerLat = (bounds.topLeftLat + bounds.bottomRightLat) / 2;
+  final centerLng = (bounds.topLeftLng + bounds.bottomRightLng) / 2;
+  return (lat: centerLat, lng: centerLng);
+}
+
+/// Calculate distance between two coordinates using Haversine formula
+double _calculateDistance(double lat1, double lng1, double lat2, double lng2) {
+  const double earthRadius = 6371000; // Earth's radius in meters
+  
+  final dLat = _degreesToRadians(lat2 - lat1);
+  final dLng = _degreesToRadians(lng2 - lng1);
+  
+  final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+      math.cos(_degreesToRadians(lat1)) * math.cos(_degreesToRadians(lat2)) *
+      math.sin(dLng / 2) * math.sin(dLng / 2);
+  
+  final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+  
+  return earthRadius * c;
+}
+
+double _degreesToRadians(double degrees) {
+  return degrees * (math.pi / 180);
+}
+
+// Replace the existing _firstBoundsContaining method with this
+_BoundsBox? _firstBoundsContaining(double lat, double lng) {
+  final result = _validateLocationWithDualGeofence(lat, lng);
+  if (result != null && result.isAllowed) {
+    _log("Location validation: ${result.reason} (Zone: ${result.zone})");
+    return result.bounds;
+  }
+  
+  // Log why location was rejected
+  if (result != null) {
+    _log("Location rejected: ${result.reason} (Zone: ${result.zone})");
+  } else {
+    _log("Location rejected: No matching geofence found");
+  }
+  
+  return null;
+}
+
+/// Result class for bounds validation
 
   Future<bool?> _confirm({
     required String title,
@@ -1980,6 +2132,13 @@ class _MarkAttendanceScreenState extends State<MarkAttendanceScreen>
   }
 }
 
+class MockLocationException implements Exception {
+  final String reason;
+  MockLocationException(this.reason);
+  
+  @override
+  String toString() => 'MockLocationException: $reason';
+}
 // =====================
 // Bounds helper
 // =====================
@@ -2051,4 +2210,17 @@ class _BoundsBox {
     final maxLng = bottomRightLng;
     return lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng;
   }
+}
+class _BoundsValidationResult {
+  final bool isAllowed;
+  final _BoundsBox bounds;
+  final String zone; // 'inner', 'outer_near', 'outer_far', 'outside'
+  final String reason;
+  
+  const _BoundsValidationResult({
+    required this.isAllowed,
+    required this.bounds,
+    required this.zone,
+    required this.reason,
+  });
 }
