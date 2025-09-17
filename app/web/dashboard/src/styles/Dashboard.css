@@ -1,0 +1,370 @@
+/* Dashboard Layout */
+.dashboard-container {
+  min-height: 100vh;
+  background-color: #f5f7fa;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.dashboard-header {
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
+  color: white;
+  padding: 1.5rem 2rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.dashboard-header h1 {
+  margin: 0;
+  font-weight: 600;
+  font-size: 1.8rem;
+}
+
+/* Views */
+.classes-view, .students-view {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* Action Panel */
+.action-panel {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+}
+
+/* Buttons */
+button {
+  cursor: pointer;
+  border: none;
+  border-radius: 8px;
+  padding: 0.75rem 1.5rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.btn-primary {
+  background-color: #4f46e5;
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: #4338ca;
+}
+
+.btn-secondary {
+  background-color: #10b981;
+  color: white;
+}
+
+.btn-secondary:hover {
+  background-color: #059669;
+}
+
+.btn-danger {
+  padding: 6px 12px;
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-danger:hover {
+  background-color: #c82333;
+}
+
+.btn-back {
+  padding: 8px 16px;
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-bottom: 15px;
+}
+
+.btn-back:hover {
+  background-color: #5a6268;
+}
+
+.btn-toggle {
+  padding: 8px 16px;
+  background-color: #e0e0e0;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-toggle.active {
+  background-color: #dc3545;
+  color: white;
+}
+
+/* Classes Grid */
+.classes-section h2 {
+  color: #374151;
+  margin-bottom: 1.5rem;
+  font-size: 1.5rem;
+}
+
+.classes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+/* Class Card */
+.class-card {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  cursor: pointer;
+}
+
+.class-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 20px rgba(0, 0, 0, 0.1);
+}
+
+.class-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.class-card-header h3 {
+  margin: 0;
+  color: #1f2937;
+  font-size: 1.25rem;
+}
+
+.student-count {
+  background-color: #e0e7ff;
+  color: #3730a3;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.class-details p {
+  margin: 0.5rem 0;
+  color: #6b7280;
+  font-size: 0.95rem;
+}
+
+.class-details strong {
+  color: #4b5563;
+}
+
+.class-card-actions {
+  margin-top: 1.5rem;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Create Group Section */
+.create-group-section {
+  margin-bottom: 20px;
+  padding: 15px;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.section-header h2 {
+  margin: 0;
+  color: #374151;
+  font-size: 1.5rem;
+}
+
+.create-group-form h3 {
+  margin-top: 0;
+  color: #374151;
+  font-size: 1.2rem;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-group label {
+  margin-bottom: 5px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.form-group input {
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 1rem;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+/* Students View */
+.students-header {
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #eee;
+}
+
+.students-header h2 {
+  color: #374151;
+  margin: 0.5rem 0;
+  font-size: 1.8rem;
+}
+
+.class-info {
+  background-color: #f8f9fa;
+  padding: 15px;
+  border-radius: 4px;
+  margin-top: 15px;
+}
+
+.class-info p {
+  margin: 5px 0;
+  color: #495057;
+}
+
+.class-info strong {
+  color: #343a40;
+}
+
+/* Add Student Form */
+.add-student-form {
+  margin-bottom: 30px;
+  padding: 20px;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+}
+
+.add-student-form h3 {
+  margin-top: 0;
+  color: #374151;
+  font-size: 1.2rem;
+}
+
+/* Students Table */
+.students-table {
+  overflow-x: auto;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 15px;
+}
+
+th, td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+
+th {
+  background-color: #f8f9fa;
+  font-weight: 600;
+  color: #374151;
+}
+
+tr:hover {
+  background-color: #f8f9fa;
+}
+
+/* Error styles */
+.form-group input.error {
+  border-color: #dc3545;
+}
+
+.error-text {
+  color: #dc3545;
+  font-size: 12px;
+  display: block;
+  margin-top: 5px;
+}
+
+.no-students {
+  text-align: center;
+  padding: 40px;
+  color: #6c757d;
+  font-style: italic;
+  background: white;
+  border-radius: 12px;
+  margin-top: 20px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .classes-view, .students-view {
+    padding: 1rem;
+  }
+  
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .classes-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .section-header {
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  
+  table {
+    font-size: 0.9rem;
+  }
+  
+  th, td {
+    padding: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboard-header {
+    padding: 1rem;
+  }
+  
+  .dashboard-header h1 {
+    font-size: 1.5rem;
+  }
+  
+  .students-header h2 {
+    font-size: 1.5rem;
+  }
+  
+  button {
+    padding: 0.6rem 1.2rem;
+    font-size: 0.9rem;
+  }
+}

@@ -4,18 +4,23 @@ import {
   collection,
   getDocs,
   addDoc,
-  updateDoc,
   deleteDoc,
   doc
 } from "firebase/firestore";
-import "./App.css";
+import ClassCard from "./components/ClassCard";
+import StudentList from "./components/StudentList";
+import "./styles/Dashboard.css";
 
 function App() {
   const [groups, setGroups] = useState([]);
-  const [newGroupName, setNewGroupName] = useState("");
-  const [newStudentName, setNewStudentName] = useState("");
-  const [selectedGroupId, setSelectedGroupId] = useState("");
-  const [selectedStudent, setSelectedStudent] = useState(null);
+  const [newClassName, setNewClassName] = useState("");
+  const [newDepartment, setNewDepartment] = useState("");
+  const [newSubjects, setNewSubjects] = useState("");
+  const [newStrength, setNewStrength] = useState("");
+  const [newTeacherName, setNewTeacherName] = useState("");
+  const [view, setView] = useState("classes");
+  const [selectedGroup, setSelectedGroup] = useState(null);
+  const [showCreateForm, setShowCreateForm] = useState(false);
 
   useEffect(() => {
     fetchGroups();
@@ -40,176 +45,150 @@ function App() {
   }
 
   async function createGroup() {
-    if (!newGroupName) return alert("Enter group name");
+    if (!newClassName) return alert("Enter class name");
+    if (!newDepartment) return alert("Enter department");
+    if (!newSubjects) return alert("Enter subjects");
+    if (!newStrength || isNaN(newStrength)) return alert("Enter valid strength number");
+    if (!newTeacherName) return alert("Enter teacher name");
+
+    // Convert subjects string to array
+    const subjectsArray = newSubjects.split(',').map(subject => subject.trim());
 
     await addDoc(collection(firestoreDB, "groups"), {
-      name: newGroupName,
-      department: "CSE",
-      breakTime: "12:00 PM",
-      subjects: ["Math", "Physics"],
-      maxStudents: 10
+      name: newClassName,
+      department: newDepartment,
+      subjects: subjectsArray,
+      strength: parseInt(newStrength),
+      teacherName: newTeacherName,
+      students: [] // Initialize empty students array
     });
 
-    setNewGroupName("");
+    // Reset form fields
+    setNewClassName("");
+    setNewDepartment("");
+    setNewSubjects("");
+    setNewStrength("");
+    setNewTeacherName("");
+    setShowCreateForm(false);
+    
     fetchGroups();
   }
 
   async function deleteGroup(groupId) {
-    await deleteDoc(doc(firestoreDB, "groups", groupId));
-    if (selectedGroupId === groupId) {
-      setSelectedGroupId("");
-      setSelectedStudent(null);
+    if (window.confirm("Are you sure you want to delete this class? All students in this class will also be deleted.")) {
+      await deleteDoc(doc(firestoreDB, "groups", groupId));
+      fetchGroups();
     }
-    fetchGroups();
   }
 
-  async function addStudent() {
-    if (!newStudentName || !selectedGroupId)
-      return alert("Select group and enter student name");
+  const handleClassClick = (group) => {
+    setSelectedGroup(group);
+    setView("students");
+  };
 
-    await addDoc(
-      collection(firestoreDB, `groups/${selectedGroupId}/students`),
-      {
-        name: newStudentName,
-        email: `${newStudentName.replace(" ", "").toLowerCase()}@example.com`
-      }
-    );
-
-    setNewStudentName("");
-    fetchGroups();
-  }
-
-  async function deleteStudent(groupId, studentId) {
-    await deleteDoc(
-      doc(firestoreDB, `groups/${groupId}/students`, studentId)
-    );
-    if (selectedStudent && selectedStudent.id === studentId) {
-      setSelectedStudent(null);
-    }
-    fetchGroups();
-  }
-
-  const selectedGroup = groups.find(g => g.id === selectedGroupId);
+  const handleBackToClasses = () => {
+    setView("classes");
+    setSelectedGroup(null);
+  };
 
   return (
-    <div className="dashboard">
-      <header className="header">
-        <h1>Groups & Students Management Dashboard</h1>
+    <div className="dashboard-container">
+      <header className="dashboard-header">
+        <h1>Classroom Management Dashboard</h1>
       </header>
 
-      <div className="main-content">
-        <aside className="sidebar">
-          <div className="form-section">
-            <h3>Create New Group</h3>
-            <div className="form-group">
-              <input
-                type="text"
-                placeholder="Group Name (e.g., 2nd CSE-B)"
-                value={newGroupName}
-                onChange={(e) => setNewGroupName(e.target.value)}
-                className="input-field"
-              />
-              <button onClick={createGroup} className="btn btn-primary">Create Group</button>
-            </div>
-          </div>
-
-          <div className="form-section">
-            <h3>Add New Student</h3>
-            <div className="form-group">
-              <select
-                value={selectedGroupId}
-                onChange={(e) => setSelectedGroupId(e.target.value)}
-                className="input-field select-field"
-              >
-                <option value="">Select Group</option>
-                {groups.map((group) => (
-                  <option key={group.id} value={group.id}>
-                    {group.name}
-                  </option>
-                ))}
-              </select>
-              <input
-                type="text"
-                placeholder="Student Name"
-                value={newStudentName}
-                onChange={(e) => setNewStudentName(e.target.value)}
-                className="input-field"
-              />
-              <button onClick={addStudent} className="btn btn-primary">Add Student</button>
-            </div>
-          </div>
-        </aside>
-
-        <main className="main-panel">
-          <section className="groups-section">
-            <h2>Classes List</h2>
-            <div className="groups-grid">
-              {groups.map((group) => (
-                <div key={group.id} className={`group-card ${selectedGroupId === group.id ? 'selected' : ''}`}>
-                  <div className="card-header">
-                    <h4>{group.name}</h4>
-                    <span className="student-count">{group.students.length} Students</span>
-                  </div>
-                  <div className="card-actions">
-                    <button 
-                      onClick={() => {
-                        setSelectedGroupId(group.id === selectedGroupId ? '' : group.id);
-                        if (selectedGroupId !== group.id) setSelectedStudent(null);
-                      }} 
-                      className="btn btn-secondary"
-                    >
-                      {selectedGroupId === group.id ? 'Hide' : 'View Students'}
-                    </button>
-                    <button onClick={() => deleteGroup(group.id)} className="btn btn-danger">Delete Group</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          {selectedGroup && (
-            <section className="students-section">
-              <h3>Students in {selectedGroup.name}</h3>
-              <div className="students-list">
-                {selectedGroup.students.map((student) => (
-                  <div 
-                    key={student.id} 
-                    className={`student-item ${selectedStudent?.id === student.id ? 'selected' : ''}`}
-                    onClick={() => setSelectedStudent(selectedStudent?.id === student.id ? null : student)}
-                  >
-                    <span className="student-name">{student.name}</span>
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteStudent(selectedGroup.id, student.id);
-                      }}
-                      className="btn btn-danger btn-small"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {selectedStudent && (
-            <section className="student-details">
-              <h3>Student Details</h3>
-              <div className="details-card">
-                <p><strong>Name:</strong> {selectedStudent.name}</p>
-                <p><strong>Email:</strong> {selectedStudent.email}</p>
+      {view === "classes" ? (
+        <div className="classes-view">
+          <div className="action-panel">
+            <div className="create-group-section">
+              <div className="section-header">
+                <h2>Class Management</h2>
                 <button 
-                  onClick={() => setSelectedStudent(null)} 
-                  className="btn btn-secondary"
+                  className={`btn-toggle ${showCreateForm ? 'active' : ''}`}
+                  onClick={() => setShowCreateForm(!showCreateForm)}
                 >
-                  Close
+                  {showCreateForm ? 'Cancel' : 'Create New Class'}
                 </button>
               </div>
-            </section>
-          )}
-        </main>
-      </div>
+              
+              {showCreateForm && (
+                <div className="create-group-form">
+                  <h3>Create New Class</h3>
+                  <div className="form-grid">
+                    <div className="form-group">
+                      <label>Class Name *</label>
+                      <input
+                        type="text"
+                        placeholder="e.g., CS101"
+                        value={newClassName}
+                        onChange={(e) => setNewClassName(e.target.value)}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Department *</label>
+                      <input
+                        type="text"
+                        placeholder="e.g., Computer Science"
+                        value={newDepartment}
+                        onChange={(e) => setNewDepartment(e.target.value)}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Subjects (comma separated) *</label>
+                      <input
+                        type="text"
+                        placeholder="e.g., Math, Physics, Programming"
+                        value={newSubjects}
+                        onChange={(e) => setNewSubjects(e.target.value)}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Strength *</label>
+                      <input
+                        type="number"
+                        placeholder="e.g., 30"
+                        value={newStrength}
+                        onChange={(e) => setNewStrength(e.target.value)}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Teacher Name *</label>
+                      <input
+                        type="text"
+                        placeholder="e.g., Dr. Smith"
+                        value={newTeacherName}
+                        onChange={(e) => setNewTeacherName(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <button className="btn-primary" onClick={createGroup}>
+                    Create Class
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="classes-section">
+            <h2>Your Classes</h2>
+            <div className="classes-grid">
+              {groups.map((group) => (
+                <ClassCard
+                  key={group.id}
+                  group={group}
+                  onClick={() => handleClassClick(group)}
+                  onDelete={() => deleteGroup(group.id)}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <StudentList
+          group={selectedGroup}
+          onBack={handleBackToClasses}
+        />
+      )}
     </div>
   );
 }
