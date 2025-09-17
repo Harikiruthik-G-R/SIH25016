@@ -84,16 +84,17 @@ class _AddUsersScreenState extends State<AddUsersScreen> {
             colors: [Colors.white, Color(0xFFF0F8F0)],
           ),
         ),
-        child: _isLoading
-            ? const Center(
-                child: CircularProgressIndicator(color: Color(0xFF4CAF50)),
-              )
-            : Column(
-                children: [
-                  _buildClassroomInfoCard(),
-                  Expanded(child: _buildStudentsList()),
-                ],
-              ),
+        child:
+            _isLoading
+                ? const Center(
+                  child: CircularProgressIndicator(color: Color(0xFF4CAF50)),
+                )
+                : Column(
+                  children: [
+                    _buildClassroomInfoCard(),
+                    Expanded(child: _buildStudentsList()),
+                  ],
+                ),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showAddStudentDialog(),
@@ -207,12 +208,13 @@ class _AddUsersScreenState extends State<AddUsersScreen> {
 
   Widget _buildStudentsList() {
     return StreamBuilder<QuerySnapshot>(
-      stream: _firestore
-          .collection('groups')
-          .doc(widget.groupData['id'])
-          .collection('students')
-          .orderBy('rollNumber')
-          .snapshots(),
+      stream:
+          _firestore
+              .collection('groups')
+              .doc(widget.groupData['id'])
+              .collection('students')
+              .orderBy('rollNumber')
+              .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return _buildErrorWidget(snapshot.error.toString());
@@ -342,7 +344,8 @@ class _AddUsersScreenState extends State<AddUsersScreen> {
     }
 
     bool isRegistered = student['biometricRegistered'] == true;
-    bool isThisStudentRegistering = _isRegistering && _registeringStudentId == student['id'];
+    bool isThisStudentRegistering =
+        _isRegistering && _registeringStudentId == student['id'];
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -434,7 +437,9 @@ class _AddUsersScreenState extends State<AddUsersScreen> {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        isRegistered ? 'Biometric Registered' : 'Biometric Not Registered',
+                        isRegistered
+                            ? 'Biometric Registered'
+                            : 'Biometric Not Registered',
                         style: TextStyle(
                           fontSize: 12,
                           color: isRegistered ? Colors.green : Colors.orange,
@@ -467,17 +472,20 @@ class _AddUsersScreenState extends State<AddUsersScreen> {
                   ),
                 ] else ...[
                   GestureDetector(
-                    onTap: isRegistered ? null : () => _registerBiometric(student),
+                    onTap:
+                        isRegistered ? null : () => _registerBiometric(student),
                     child: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: isRegistered
-                            ? Colors.green.withOpacity(0.1)
-                            : Colors.orange.withOpacity(0.1),
+                        color:
+                            isRegistered
+                                ? Colors.green.withOpacity(0.1)
+                                : Colors.orange.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(8),
-                        border: !isRegistered
-                            ? Border.all(color: Colors.orange, width: 1)
-                            : null,
+                        border:
+                            !isRegistered
+                                ? Border.all(color: Colors.orange, width: 1)
+                                : null,
                       ),
                       child: Icon(
                         isRegistered
@@ -519,18 +527,19 @@ class _AddUsersScreenState extends State<AddUsersScreen> {
                 // Menu button
                 PopupMenuButton(
                   icon: const Icon(Icons.more_vert),
-                  itemBuilder: (context) => [
-                    const PopupMenuItem(value: 'edit', child: Text('Edit')),
-                    if (isRegistered)
-                      const PopupMenuItem(
-                        value: 'reregister',
-                        child: Text('Re-register Biometric'),
-                      ),
-                    const PopupMenuItem(
-                      value: 'delete',
-                      child: Text('Delete'),
-                    ),
-                  ],
+                  itemBuilder:
+                      (context) => [
+                        const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                        if (isRegistered)
+                          const PopupMenuItem(
+                            value: 'reregister',
+                            child: Text('Re-register Biometric'),
+                          ),
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Text('Delete'),
+                        ),
+                      ],
                   onSelected: (value) async {
                     switch (value) {
                       case 'edit':
@@ -557,301 +566,304 @@ class _AddUsersScreenState extends State<AddUsersScreen> {
   }
 
   // Biometric registration method
-// Merged biometric registration method
-// Merged biometric registration method
-Future<void> _registerBiometric(Map<String, dynamic> student, {bool isReregistration = false}) async {
-  try {
-    setState(() {
-      _isRegistering = true;
-      _registeringStudentId = student['id'];
-    });
+  // Merged biometric registration method
+  // Merged biometric registration method
+  Future<void> _registerBiometric(
+    Map<String, dynamic> student, {
+    bool isReregistration = false,
+  }) async {
+    try {
+      setState(() {
+        _isRegistering = true;
+        _registeringStudentId = student['id'];
+      });
 
-    // Show initial loading dialog
-    _showLoadingDialog(
-      'Initializing...',
-      'Preparing biometric scanner',
-    );
+      // Show initial loading dialog
+      _showLoadingDialog('Initializing...', 'Preparing biometric scanner');
 
-    // Check if scanner is available
-    bool isAvailable = await BiometricService.isScannerAvailable();
-    if (!isAvailable) {
-      Navigator.pop(context);
-      _showErrorSnackBar("Biometric scanner not available on this device");
-      return;
-    }
-
-    // Initialize scanner
-    bool initialized = await BiometricService.initializeScanner();
-    if (!initialized) {
-      Navigator.pop(context);
-      _showErrorSnackBar("Failed to initialize biometric scanner");
-      return;
-    }
-
-    // Update dialog for fingerprint capture
-    Navigator.pop(context);
-    _showFingerprintCaptureDialog(student['name'] ?? 'Student');
-
-    // Capture fingerprint using BiometricService
-    final result = await BiometricService.captureFingerprint(student['name'] ?? 'Student');
-
-    // Close fingerprint dialog
-    Navigator.pop(context);
-
-    if (!(result['success'] ?? false)) {
-      _showErrorSnackBar(result['error'] ?? "Fingerprint capture failed");
-      return;
-    }
-
-    // Extract data from result
-    final String template = result['template'] ?? '';
-    final String fingerprintData = result['fingerprintData'] ?? '';
-    final int quality = result['quality'] ?? 0;
-    final String deviceId = await BiometricService.getDeviceId();
-
-    // Show processing dialog
-    _showLoadingDialog(
-      'Processing fingerprint...',
-      'Checking for duplicates',
-    );
-
-    // Check for duplicate fingerprints in Firestore (global check)
-    final duplicateCheck = await FirebaseFirestore.instance
-        .collection('students')
-        .where('fingerprintTemplate', isEqualTo: template)
-        .get();
-
-    // If re-registration, exclude current student from duplicate check
-    bool isDuplicate = false;
-    if (duplicateCheck.docs.isNotEmpty) {
-      if (isReregistration) {
-        // For re-registration, check if any other student (not current) has this template
-        isDuplicate = duplicateCheck.docs.any((doc) => doc.id != student['id']);
-      } else {
-        isDuplicate = true;
+      // Check if scanner is available
+      bool isAvailable = await BiometricService.isScannerAvailable();
+      if (!isAvailable) {
+        Navigator.pop(context);
+        _showErrorSnackBar("Biometric scanner not available on this device");
+        return;
       }
-    }
 
-    if (isDuplicate) {
+      // Initialize scanner
+      bool initialized = await BiometricService.initializeScanner();
+      if (!initialized) {
+        Navigator.pop(context);
+        _showErrorSnackBar("Failed to initialize biometric scanner");
+        return;
+      }
+
+      // Update dialog for fingerprint capture
       Navigator.pop(context);
-      _showErrorSnackBar("Fingerprint already registered to another student!");
-      return;
-    }
+      _showFingerprintCaptureDialog(student['name'] ?? 'Student');
 
-    // Update dialog for saving
-    Navigator.pop(context);
-    _showLoadingDialog(
-      'Saving biometric data...',
-      'Storing in cloud database',
-    );
+      // Capture fingerprint using BiometricService
+      final result = await BiometricService.captureFingerprint(
+        student['name'] ?? 'Student',
+      );
 
-    // Save fingerprint template in Firestore
-    // First, update the group's students subcollection (this should always exist)
-    await _firestore
-        .collection('groups')
-        .doc(widget.groupData['id'])
-        .collection('students')
-        .doc(student['id'])
-        .update({
-      'biometricRegistered': true,
-      'fingerprintTemplate': template,
-      'fingerprintData': fingerprintData,
-      'biometricQuality': quality,
-      'registrationDeviceId': deviceId,
-      'biometricRegisteredAt': FieldValue.serverTimestamp(),
-      'biometricVersion': '1.0',
-    });
+      // Close fingerprint dialog
+      Navigator.pop(context);
 
-    // Check if global student document exists, create or update accordingly
-    final globalStudentDoc = await FirebaseFirestore.instance
-        .collection('students')
-        .doc(student['id'])
-        .get();
+      if (!(result['success'] ?? false)) {
+        _showErrorSnackBar(result['error'] ?? "Fingerprint capture failed");
+        return;
+      }
 
-    final biometricData = {
-      'biometricRegistered': true,
-      'fingerprintTemplate': template,
-      'fingerprintData': fingerprintData,
-      'biometricQuality': quality,
-      'registrationDeviceId': deviceId,
-      'biometricRegisteredAt': FieldValue.serverTimestamp(),
-      'biometricVersion': '1.0',
-    };
+      // Extract data from result
+      final String template = result['template'] ?? '';
+      final String fingerprintData = result['fingerprintData'] ?? '';
+      final int quality = result['quality'] ?? 0;
+      final String deviceId = await BiometricService.getDeviceId();
 
-    if (globalStudentDoc.exists) {
-      // Document exists, update it
-      await FirebaseFirestore.instance
+      // Show processing dialog
+      _showLoadingDialog(
+        'Processing fingerprint...',
+        'Checking for duplicates',
+      );
+
+      // Check for duplicate fingerprints in Firestore (global check)
+      final duplicateCheck =
+          await FirebaseFirestore.instance
+              .collection('students')
+              .where('fingerprintTemplate', isEqualTo: template)
+              .get();
+
+      // If re-registration, exclude current student from duplicate check
+      bool isDuplicate = false;
+      if (duplicateCheck.docs.isNotEmpty) {
+        if (isReregistration) {
+          // For re-registration, check if any other student (not current) has this template
+          isDuplicate = duplicateCheck.docs.any(
+            (doc) => doc.id != student['id'],
+          );
+        } else {
+          isDuplicate = true;
+        }
+      }
+
+      if (isDuplicate) {
+        Navigator.pop(context);
+        _showErrorSnackBar(
+          "Fingerprint already registered to another student!",
+        );
+        return;
+      }
+
+      // Update dialog for saving
+      Navigator.pop(context);
+      _showLoadingDialog(
+        'Saving biometric data...',
+        'Storing in cloud database',
+      );
+
+      // Save fingerprint template in Firestore
+      // First, update the group's students subcollection (this should always exist)
+      await _firestore
+          .collection('groups')
+          .doc(widget.groupData['id'])
           .collection('students')
           .doc(student['id'])
-          .update(biometricData);
-    } else {
-      // Document doesn't exist, create it with student data + biometric data
-      await FirebaseFirestore.instance
-          .collection('students')
-          .doc(student['id'])
-          .set({
-        ...student, // Include all student data
-        ...biometricData, // Add biometric data
-        'createdAt': FieldValue.serverTimestamp(),
+          .update({
+            'biometricRegistered': true,
+            'fingerprintTemplate': template,
+            'fingerprintData': fingerprintData,
+            'biometricQuality': quality,
+            'registrationDeviceId': deviceId,
+            'biometricRegisteredAt': FieldValue.serverTimestamp(),
+            'biometricVersion': '1.0',
+          });
+
+      // Check if global student document exists, create or update accordingly
+      final globalStudentDoc =
+          await FirebaseFirestore.instance
+              .collection('students')
+              .doc(student['id'])
+              .get();
+
+      final biometricData = {
+        'biometricRegistered': true,
+        'fingerprintTemplate': template,
+        'fingerprintData': fingerprintData,
+        'biometricQuality': quality,
+        'registrationDeviceId': deviceId,
+        'biometricRegisteredAt': FieldValue.serverTimestamp(),
+        'biometricVersion': '1.0',
+      };
+
+      if (globalStudentDoc.exists) {
+        // Document exists, update it
+        await FirebaseFirestore.instance
+            .collection('students')
+            .doc(student['id'])
+            .update(biometricData);
+      } else {
+        // Document doesn't exist, create it with student data + biometric data
+        await FirebaseFirestore.instance
+            .collection('students')
+            .doc(student['id'])
+            .set({
+              ...student, // Include all student data
+              ...biometricData, // Add biometric data
+              'createdAt': FieldValue.serverTimestamp(),
+            });
+      }
+
+      Navigator.pop(context);
+
+      // Show success message
+      _showSuccessSnackBar(
+        isReregistration
+            ? "${student['name']} biometric re-registered successfully!"
+            : "${student['name']} biometric registered successfully!",
+      );
+    } catch (e) {
+      // Close any open dialogs
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+      _showErrorSnackBar(
+        "Error during biometric registration: ${e.toString()}",
+      );
+    } finally {
+      setState(() {
+        _isRegistering = false;
+        _registeringStudentId = null;
       });
     }
-
-    Navigator.pop(context);
-
-    // Show success message
-    _showSuccessSnackBar(
-      isReregistration 
-        ? "${student['name']} biometric re-registered successfully!"
-        : "${student['name']} biometric registered successfully!"
-    );
-
-  } catch (e) {
-    // Close any open dialogs
-    if (Navigator.canPop(context)) {
-      Navigator.pop(context);
-    }
-    _showErrorSnackBar("Error during biometric registration: ${e.toString()}");
-  } finally {
-    setState(() {
-      _isRegistering = false;
-      _registeringStudentId = null;
-    });
   }
-}
 
-// Enhanced loading dialog
-void _showLoadingDialog(String title, String subtitle) {
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (BuildContext context) {
-      return AlertDialog(
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const CircularProgressIndicator(color: Color(0xFF4CAF50)),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
+  // Enhanced loading dialog
+  void _showLoadingDialog(String title, String subtitle) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(color: Color(0xFF4CAF50)),
+              const SizedBox(height: 16),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
               ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              subtitle,
-              style: const TextStyle(
-                fontSize: 14, 
-                color: Colors.grey,
+              const SizedBox(height: 8),
+              Text(
+                subtitle,
+                style: const TextStyle(fontSize: 14, color: Colors.grey),
+                textAlign: TextAlign.center,
               ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      );
-    },
-  );
-}
+            ],
+          ),
+        );
+      },
+    );
+  }
 
-// Fingerprint capture dialog
-void _showFingerprintCaptureDialog(String studentName) {
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (BuildContext context) {
-      return AlertDialog(
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF4CAF50).withOpacity(0.1),
-                shape: BoxShape.circle,
+  // Fingerprint capture dialog
+  void _showFingerprintCaptureDialog(String studentName) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF4CAF50).withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.fingerprint,
+                  size: 64,
+                  color: Color(0xFF4CAF50),
+                ),
               ),
-              child: const Icon(
-                Icons.fingerprint,
-                size: 64,
-                color: Color(0xFF4CAF50),
+              const SizedBox(height: 16),
+              const Text(
+                'Fingerprint Registration',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
               ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Fingerprint Registration',
-              style: TextStyle(
-                fontSize: 18, 
-                fontWeight: FontWeight.bold,
+              const SizedBox(height: 8),
+              Text(
+                'Registering fingerprint for $studentName',
+                style: const TextStyle(fontSize: 14, color: Colors.grey),
+                textAlign: TextAlign.center,
               ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Registering fingerprint for $studentName',
-              style: const TextStyle(
-                fontSize: 14, 
-                color: Colors.grey,
+              const SizedBox(height: 8),
+              const Text(
+                'Place finger on the sensor when prompted',
+                style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
+                textAlign: TextAlign.center,
               ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Place finger on the sensor when prompted',
-              style: TextStyle(
-                fontSize: 12,
-                fontStyle: FontStyle.italic,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      );
-    },
-  );
-}
-// Enhanced loading dialog
+            ],
+          ),
+        );
+      },
+    );
+  }
+  // Enhanced loading dialog
 
-// Fingerprint capture dialog
+  // Fingerprint capture dialog
 
   // Generate a simulated fingerprint hash
 
   // Check for duplicate fingerprints
-  Future<bool> _checkForDuplicateFingerprint(String fingerprintHash, String currentStudentId, bool isReregistration) async {
+  Future<bool> _checkForDuplicateFingerprint(
+    String fingerprintHash,
+    String currentStudentId,
+    bool isReregistration,
+  ) async {
     try {
       // Query all students in the group to check for duplicate fingerprints
-      final QuerySnapshot studentsSnapshot = await _firestore
-          .collection('groups')
-          .doc(widget.groupData['id'])
-          .collection('students')
-          .where('biometricRegistered', isEqualTo: true)
-          .get();
+      final QuerySnapshot studentsSnapshot =
+          await _firestore
+              .collection('groups')
+              .doc(widget.groupData['id'])
+              .collection('students')
+              .where('biometricRegistered', isEqualTo: true)
+              .get();
 
       for (var doc in studentsSnapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
-        
+
         // Skip current student if it's a re-registration
         if (isReregistration && doc.id == currentStudentId) {
           continue;
         }
-        
+
         // Check if fingerprint hash matches
         if (data['fingerprintHash'] == fingerprintHash) {
           return true; // Duplicate found
         }
-        
+
         // Additional check for similar fingerprint patterns (simulated)
         if (data['fingerprintHash'] != null) {
           double similarity = _calculateFingerprintSimilarity(
             fingerprintHash,
-            data['fingerprintHash']
+            data['fingerprintHash'],
           );
-          if (similarity > 0.85) { // 85% similarity threshold
+          if (similarity > 0.85) {
+            // 85% similarity threshold
             return true;
           }
         }
       }
-      
+
       return false; // No duplicate found
     } catch (e) {
       print('Error checking for duplicate fingerprint: $e');
@@ -862,14 +874,14 @@ void _showFingerprintCaptureDialog(String studentName) {
   // Calculate fingerprint similarity (simulated)
   double _calculateFingerprintSimilarity(String hash1, String hash2) {
     if (hash1.length != hash2.length) return 0.0;
-    
+
     int matches = 0;
     for (int i = 0; i < hash1.length; i++) {
       if (hash1[i] == hash2[i]) {
         matches++;
       }
     }
-    
+
     return matches / hash1.length;
   }
 
@@ -914,9 +926,10 @@ void _showFingerprintCaptureDialog(String studentName) {
   void _showBulkUploadDialog() {
     // Ensure we have valid group data
     final String groupId = widget.groupData['id'] ?? 'demo_group';
-    final Map<String, dynamic> groupData = widget.groupData.isEmpty
-        ? {'id': 'demo_group', 'name': 'Demo Classroom'}
-        : widget.groupData;
+    final Map<String, dynamic> groupData =
+        widget.groupData.isEmpty
+            ? {'id': 'demo_group', 'name': 'Demo Classroom'}
+            : widget.groupData;
 
     showDialog(
       context: context,
@@ -935,50 +948,53 @@ void _showFingerprintCaptureDialog(String studentName) {
   void _showAddStudentDialog() {
     showDialog(
       context: context,
-      builder: (context) => AddStudentDialog(
-        groupId: widget.groupData['id'],
-        groupData: widget.groupData,
-      ),
+      builder:
+          (context) => AddStudentDialog(
+            groupId: widget.groupData['id'],
+            groupData: widget.groupData,
+          ),
     );
   }
 
   void _showEditStudentDialog(Map<String, dynamic> student) {
     showDialog(
       context: context,
-      builder: (context) => EditStudentDialog(
-        groupId: widget.groupData['id'],
-        groupData: widget.groupData,
-        student: student,
-      ),
+      builder:
+          (context) => EditStudentDialog(
+            groupId: widget.groupData['id'],
+            groupData: widget.groupData,
+            student: student,
+          ),
     );
   }
 
   void _showDeleteStudentConfirmation(String studentId, String studentName) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Student'),
-        content: Text(
-          'Are you sure you want to remove $studentName from this classroom?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              _deleteStudent(studentId);
-              Navigator.pop(context);
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text(
-              'Delete',
-              style: TextStyle(color: Colors.white),
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Delete Student'),
+            content: Text(
+              'Are you sure you want to remove $studentName from this classroom?',
             ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  _deleteStudent(studentId);
+                  Navigator.pop(context);
+                },
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                child: const Text(
+                  'Delete',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 
@@ -998,9 +1014,9 @@ void _showFingerprintCaptureDialog(String studentName) {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error removing student: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error removing student: $e')));
       }
     }
   }
@@ -1042,7 +1058,6 @@ class _BulkUploadDialogState extends State<BulkUploadDialog> {
     );
   }
 }
-
 
 class AddStudentDialog extends StatefulWidget {
   final String groupId;
@@ -1107,6 +1122,18 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
       setState(() {
         _isScannerAvailable = false;
       });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Biometric features disabled. Students can still be added manually.',
+            ),
+            backgroundColor: Colors.blue,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
     }
   }
 
@@ -1156,9 +1183,11 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
                     controller: _rollNumberController,
                     label: 'Roll Number',
                     icon: Icons.numbers,
-                    validator: (value) => value?.isEmpty ?? true
-                        ? 'Please enter roll number'
-                        : null,
+                    validator:
+                        (value) =>
+                            value?.isEmpty ?? true
+                                ? 'Please enter roll number'
+                                : null,
                   ),
                   const SizedBox(height: 16),
 
@@ -1166,8 +1195,9 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
                     controller: _nameController,
                     label: 'Full Name',
                     icon: Icons.person,
-                    validator: (value) =>
-                        value?.isEmpty ?? true ? 'Please enter name' : null,
+                    validator:
+                        (value) =>
+                            value?.isEmpty ?? true ? 'Please enter name' : null,
                   ),
                   const SizedBox(height: 16),
 
@@ -1189,9 +1219,11 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
                     controller: _phoneController,
                     label: 'Phone Number',
                     icon: Icons.phone,
-                    validator: (value) => value?.isEmpty ?? true
-                        ? 'Please enter phone'
-                        : null,
+                    validator:
+                        (value) =>
+                            value?.isEmpty ?? true
+                                ? 'Please enter phone'
+                                : null,
                   ),
                   const SizedBox(height: 16),
 
@@ -1212,30 +1244,35 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       TextButton(
-                        onPressed: _isLoading ? null : () => Navigator.pop(context),
+                        onPressed:
+                            _isLoading ? null : () => Navigator.pop(context),
                         child: const Text('Cancel'),
                       ),
                       const SizedBox(width: 8),
                       ElevatedButton(
-                        onPressed: (_isLoading || !_biometricCaptured)
-                            ? null
-                            : _addStudent,
+                        onPressed:
+                            (_isLoading ||
+                                    (_isScannerAvailable &&
+                                        !_biometricCaptured))
+                                ? null
+                                : _addStudent,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF4CAF50),
                         ),
-                        child: _isLoading
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
+                        child:
+                            _isLoading
+                                ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                                : const Text(
+                                  'Add Student',
+                                  style: TextStyle(color: Colors.white),
                                 ),
-                              )
-                            : const Text(
-                                'Add Student',
-                                style: TextStyle(color: Colors.white),
-                              ),
                       ),
                     ],
                   ),
@@ -1290,12 +1327,14 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
               children: [
                 Icon(Icons.warning, color: Colors.red.shade400),
                 const SizedBox(width: 8),
-                Text(
-                  'Biometric Scanner Unavailable',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.red.shade600,
+                Expanded(
+                  child: Text(
+                    'Biometric Scanner Unavailable',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.red.shade600,
+                    ),
                   ),
                 ),
               ],
@@ -1303,10 +1342,7 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
             const SizedBox(height: 8),
             Text(
               'Biometric scanner is not available on this device. Students will be added without biometric registration.',
-              style: TextStyle(
-                color: Colors.red.shade500,
-                fontSize: 14,
-              ),
+              style: TextStyle(color: Colors.red.shade500, fontSize: 14),
             ),
           ],
         ),
@@ -1326,15 +1362,18 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
             children: [
               Icon(
                 Icons.fingerprint,
-                color: _biometricCaptured ? Colors.green : const Color(0xFF4CAF50),
+                color:
+                    _biometricCaptured ? Colors.green : const Color(0xFF4CAF50),
               ),
               const SizedBox(width: 8),
-              Text(
-                'Biometric Registration',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: _biometricCaptured ? Colors.green : Colors.black87,
+              Expanded(
+                child: Text(
+                  'Biometric Registration',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: _biometricCaptured ? Colors.green : Colors.black87,
+                  ),
                 ),
               ),
             ],
@@ -1389,9 +1428,10 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
                   style: const TextStyle(color: Colors.white),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _biometricCaptured
-                      ? Colors.green
-                      : const Color(0xFF4CAF50),
+                  backgroundColor:
+                      _biometricCaptured
+                          ? Colors.green
+                          : const Color(0xFF4CAF50),
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
@@ -1447,7 +1487,7 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
 
       // Capture fingerprint
       final result = await BiometricService.captureFingerprint(
-        _nameController.text.isNotEmpty ? _nameController.text : 'Student'
+        _nameController.text.isNotEmpty ? _nameController.text : 'Student',
       );
 
       if (!(result['success'] ?? false)) {
@@ -1460,7 +1500,9 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
       if (template.isNotEmpty) {
         bool isDuplicate = await _checkForDuplicateFingerprint(template);
         if (isDuplicate) {
-          _showErrorMessage('This fingerprint is already registered to another student!');
+          _showErrorMessage(
+            'This fingerprint is already registered to another student!',
+          );
           return;
         }
       }
@@ -1477,7 +1519,6 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
       });
 
       _showSuccessMessage('Biometric registration completed successfully!');
-
     } catch (e) {
       _showErrorMessage('Error during biometric capture: $e');
     } finally {
@@ -1490,12 +1531,13 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
   Future<bool> _checkForDuplicateFingerprint(String template) async {
     try {
       // Check in current group's students
-      final groupStudents = await FirebaseFirestore.instance
-          .collection('groups')
-          .doc(widget.groupId)
-          .collection('students')
-          .where('biometricRegistered', isEqualTo: true)
-          .get();
+      final groupStudents =
+          await FirebaseFirestore.instance
+              .collection('groups')
+              .doc(widget.groupId)
+              .collection('students')
+              .where('biometricRegistered', isEqualTo: true)
+              .get();
 
       for (var doc in groupStudents.docs) {
         final data = doc.data();
@@ -1509,7 +1551,7 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
             data['fingerprintTemplate'],
             template,
           );
-          
+
           double confidence = verifyResult['confidence'] ?? 0.0;
           if (confidence > 0.85) {
             return true;
@@ -1518,10 +1560,11 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
       }
 
       // Check global students collection
-      final globalStudents = await FirebaseFirestore.instance
-          .collection('students')
-          .where('fingerprintTemplate', isEqualTo: template)
-          .get();
+      final globalStudents =
+          await FirebaseFirestore.instance
+              .collection('students')
+              .where('fingerprintTemplate', isEqualTo: template)
+              .get();
 
       return globalStudents.docs.isNotEmpty;
     } catch (e) {
@@ -1541,12 +1584,13 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
 
       try {
         // Check if roll number already exists
-        final existingStudents = await FirebaseFirestore.instance
-            .collection('groups')
-            .doc(widget.groupId)
-            .collection('students')
-            .where('rollNumber', isEqualTo: _rollNumberController.text)
-            .get();
+        final existingStudents =
+            await FirebaseFirestore.instance
+                .collection('groups')
+                .doc(widget.groupId)
+                .collection('students')
+                .where('rollNumber', isEqualTo: _rollNumberController.text)
+                .get();
 
         if (existingStudents.docs.isNotEmpty) {
           _showErrorMessage('Student with this roll number already exists');
@@ -1554,12 +1598,13 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
         }
 
         // Check if email already exists
-        final existingEmails = await FirebaseFirestore.instance
-            .collection('groups')
-            .doc(widget.groupId)
-            .collection('students')
-            .where('email', isEqualTo: _emailController.text)
-            .get();
+        final existingEmails =
+            await FirebaseFirestore.instance
+                .collection('groups')
+                .doc(widget.groupId)
+                .collection('students')
+                .where('email', isEqualTo: _emailController.text)
+                .get();
 
         if (existingEmails.docs.isNotEmpty) {
           _showErrorMessage('Student with this email already exists');
@@ -1629,10 +1674,7 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
   void _showSuccessMessage(String message) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: Colors.green,
-        ),
+        SnackBar(content: Text(message), backgroundColor: Colors.green),
       );
     }
   }
@@ -1640,10 +1682,7 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
   void _showErrorMessage(String message) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: Colors.red,
-        ),
+        SnackBar(content: Text(message), backgroundColor: Colors.red),
       );
     }
   }
@@ -1658,6 +1697,7 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
     super.dispose();
   }
 }
+
 // Edit Student Dialog
 class EditStudentDialog extends StatefulWidget {
   final String groupId;
@@ -2018,7 +2058,8 @@ class EnhancedBulkUploadDialog extends StatefulWidget {
   });
 
   @override
-  State<EnhancedBulkUploadDialog> createState() => _EnhancedBulkUploadDialogState();
+  State<EnhancedBulkUploadDialog> createState() =>
+      _EnhancedBulkUploadDialogState();
 }
 
 class _EnhancedBulkUploadDialogState extends State<EnhancedBulkUploadDialog>
@@ -2070,7 +2111,7 @@ class _EnhancedBulkUploadDialogState extends State<EnhancedBulkUploadDialog>
         insetPadding: const EdgeInsets.all(16),
         child: Container(
           width: MediaQuery.of(context).size.width,
-          height: MediaQuery.of(context).size.height  * 0.85,
+          height: MediaQuery.of(context).size.height * 0.85,
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(24),

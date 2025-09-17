@@ -227,6 +227,44 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
           ],
         ),
         actions: [
+          // Debug button to create test attendance data
+          Container(
+            margin: EdgeInsets.only(right: 4),
+            decoration: BoxDecoration(
+              color: Colors.orange.withOpacity(0.8),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: IconButton(
+              padding: EdgeInsets.all(8),
+              constraints: BoxConstraints(minWidth: 40, minHeight: 40),
+              icon: Icon(Icons.bug_report, color: Colors.white, size: 20),
+              tooltip: 'Create Test Attendance Data',
+              onPressed: () async {
+                try {
+                  await TestDataCreator.createTestAttendanceData();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('✅ Test attendance data created!'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                    // Reload data to show the new test data
+                    _loadTeacherData();
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('❌ Error creating test data: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              },
+            ),
+          ),
           Container(
             margin: EdgeInsets.only(right: 4),
             decoration: BoxDecoration(
@@ -999,8 +1037,11 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
 
   // Cached students data to avoid reloading on search
   Map<String, List<Map<String, dynamic>>> _cachedStudentsData = {
-    'Enrolled': [],
-    'Absentees': [],
+    'Excellent (90-100%)': [],
+    'Good (75-89%)': [],
+    'Average (60-74%)': [],
+    'Below Average (40-59%)': [],
+    'Poor (0-39%)': [],
   };
   bool _studentsDataLoaded = false;
 
@@ -1020,7 +1061,11 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
   Future<void> _loadAllData() async {
     setState(() => _isLoading = true);
     try {
-      await Future.wait([_loadGroupStudents(), _loadAttendanceForDate()]);
+      await Future.wait([
+        _loadGroupStudents(),
+        _loadAttendanceForDate(),
+        _loadAllStudentsInGroups(), // Add this to populate cached student data
+      ]);
       await _calculateStats();
     } catch (e) {
       if (mounted) {
@@ -1037,49 +1082,227 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
     try {
       _groupStudents.clear();
 
+      print('📚 Loading students for ${widget.groups.length} groups...');
+
       for (var group in widget.groups) {
         final groupId = group['groupId'];
         final groupName = group['groupName'] ?? 'Unknown Group';
 
-        // Try to get students from groups collection
-        final studentsQuery =
-            await FirebaseFirestore.instance
-                .collection('groups')
-                .doc(groupId)
-                .collection('students')
-                .get();
+        print('🔍 Processing group: $groupName (ID: $groupId)');
+        print('🔍 Full group data: $group');
 
-        List<String> students = [];
-        for (var doc in studentsQuery.docs) {
-          // The document ID is the roll number
-          students.add(doc.id);
+        // Let's also check what groups actually exist in Firestore
+        try {
+          print('🔍 Checking available groups in Firestore...');
+          final allGroupsQuery =
+              await FirebaseFirestore.instance.collection('groups').get();
+          print('📋 Found ${allGroupsQuery.docs.length} groups in Firestore:');
 
-          // Also check if there's student data in the document
-          final studentData = doc.data();
-          if (studentData.containsKey('rollNumber')) {
-            students.add(studentData['rollNumber'].toString());
+          String? correctGroupId;
+          for (var doc in allGroupsQuery.docs) {
+            final data = doc.data();
+            final name = data['name'] ?? 'Unknown';
+            print('   - ID: ${doc.id}, Name: $name');
+
+            // Check if this matches our group name exactly
+            if (name == groupName) {
+              correctGroupId = doc.id;
+              print('   ✅ POTENTIAL MATCH: ID: ${doc.id}, Name: $name');
+            }
+          }
+
+          // Use the correct group ID if found
+          if (correctGroupId != null && correctGroupId != groupId) {
+            print(
+              '🔄 Switching from $groupId to $correctGroupId for group $groupName',
+            );
+            group['groupId'] = correctGroupId; // Update the group data
+          }
+        } catch (e) {
+          print('❌ Error checking available groups: $e');
+        }
+
+        // Get the (potentially corrected) group ID
+        final finalGroupId = group['groupId'];
+
+        // Get students by looking through student_checkins collection
+        // and finding students that belong to this group for the teacher's subject
+        Set<String> students = {};
+
+        try {
+          // Try multiple approaches to access the student_checkins collection
+          print('  🔍 Attempt 1: Standard collection query...');
+          final checkinsQuery =
+              await FirebaseFirestore.instance
+                  .collection('student_checkins')
+                  .get();
+
+          print(
+            '  👥 Standard query returned ${checkinsQuery.docs.length} student documents',
+          );
+
+          if (checkinsQuery.docs.isEmpty) {
+            // Try direct access to specific documents we know should exist
+            print('  🔍 Attempt 2: Direct document access...');
+            final knownRollNumbers = ['23CSR071', '23CSR112', '23EEE029'];
+
+            for (String rollNumber in knownRollNumbers) {
+              try {
+                final docRef = FirebaseFirestore.instance
+                    .collection('student_checkins')
+                    .doc(rollNumber);
+                final docSnap = await docRef.get();
+
+                if (docSnap.exists) {
+                  print('  ✅ Found document for $rollNumber');
+                  final sessionsSnap =
+                      await docRef.collection('sessions').get();
+                  print('    � Sessions: ${sessionsSnap.docs.length}');
+
+                  // Check if any sessions match our criteria
+                  for (var sessionDoc in sessionsSnap.docs) {
+                    final sessionData = sessionDoc.data();
+                    final studentData =
+                        sessionData['student'] as Map<String, dynamic>?;
+                    final sessionSubject =
+                        sessionData['subject']?.toString() ?? '';
+                    final studentGroupId =
+                        studentData?['groupId']?.toString() ?? '';
+                    final studentGroupName =
+                        studentData?['groupName']?.toString() ?? '';
+
+                    print(
+                      '    🔖 Session: subject=$sessionSubject, groupId=$studentGroupId, groupName=$studentGroupName',
+                    );
+
+                    // Check if this session belongs to our group and subject
+                    if ((studentGroupId == finalGroupId ||
+                            studentGroupName == groupName) &&
+                        sessionSubject == widget.subject) {
+                      students.add(rollNumber);
+                      print(
+                        '  ✅ Added student $rollNumber for group $groupName with subject ${widget.subject}',
+                      );
+                      break;
+                    }
+                  }
+                } else {
+                  print('  ❌ Document $rollNumber does not exist');
+                }
+              } catch (docError) {
+                print('  ❌ Error accessing document $rollNumber: $docError');
+              }
+            }
+          } else {
+            // Process the documents normally
+            for (var studentDoc in checkinsQuery.docs) {
+              final rollNumber = studentDoc.id;
+
+              // Get all sessions for this student
+              final sessionsQuery =
+                  await studentDoc.reference.collection('sessions').get();
+
+              for (var sessionDoc in sessionsQuery.docs) {
+                final sessionData = sessionDoc.data();
+                final studentData =
+                    sessionData['student'] as Map<String, dynamic>?;
+                final sessionSubject = sessionData['subject']?.toString() ?? '';
+                final studentGroupId =
+                    studentData?['groupId']?.toString() ?? '';
+                final studentGroupName =
+                    studentData?['groupName']?.toString() ?? '';
+
+                // Check if this student belongs to the current group and has sessions for the current subject
+                if ((studentGroupId == finalGroupId ||
+                        studentGroupName == groupName) &&
+                    sessionSubject == widget.subject) {
+                  students.add(rollNumber);
+                  print(
+                    '  ✅ Found student $rollNumber for group $groupName with subject ${widget.subject}',
+                  );
+                  break; // Found a matching session, no need to check more sessions for this student
+                }
+              }
+            }
+          }
+        } catch (e) {
+          print('  ❌ Error accessing student_checkins: $e');
+        }
+
+        // Also try to get students from students collection as additional fallback
+        if (students.isEmpty) {
+          print(
+            '  🔍 Attempt 3: Loading from groups/$finalGroupId/students subcollection...',
+          );
+          try {
+            final studentsQuery =
+                await FirebaseFirestore.instance
+                    .collection('groups')
+                    .doc(finalGroupId)
+                    .collection('students')
+                    .get();
+
+            print(
+              '  👥 Found ${studentsQuery.docs.length} students in groups/$groupId/students subcollection',
+            );
+
+            for (var doc in studentsQuery.docs) {
+              final studentData = doc.data();
+              final rollNumber = studentData['rollNumber']?.toString();
+              if (rollNumber != null) {
+                students.add(rollNumber);
+                print(
+                  '  ✅ Added student $rollNumber from groups subcollection',
+                );
+              }
+            }
+          } catch (e) {
+            print(
+              '  ❌ Error accessing groups/$finalGroupId/students subcollection: $e',
+            );
           }
         }
 
-        // If no students found in subcollection, try to get from group document itself
+        // Also try to get students from groups collection as fallback
         if (students.isEmpty) {
-          final groupDoc =
+          final studentsQuery =
               await FirebaseFirestore.instance
                   .collection('groups')
-                  .doc(groupId)
+                  .doc(finalGroupId)
+                  .collection('students')
                   .get();
 
-          if (groupDoc.exists) {
-            final groupData = groupDoc.data();
-            if (groupData != null && groupData.containsKey('students')) {
-              final groupStudents = groupData['students'];
-              if (groupStudents is List) {
-                for (var student in groupStudents) {
-                  if (student is String) {
-                    students.add(student);
-                  } else if (student is Map &&
-                      student.containsKey('rollNumber')) {
-                    students.add(student['rollNumber'].toString());
+          for (var doc in studentsQuery.docs) {
+            // The document ID is the roll number
+            students.add(doc.id);
+
+            // Also check if there's student data in the document
+            final studentData = doc.data();
+            if (studentData.containsKey('rollNumber')) {
+              students.add(studentData['rollNumber'].toString());
+            }
+          }
+
+          // If still no students found in subcollection, try to get from group document itself
+          if (students.isEmpty) {
+            final groupDoc =
+                await FirebaseFirestore.instance
+                    .collection('groups')
+                    .doc(finalGroupId)
+                    .get();
+
+            if (groupDoc.exists) {
+              final groupData = groupDoc.data();
+              if (groupData != null && groupData.containsKey('students')) {
+                final groupStudents = groupData['students'];
+                if (groupStudents is List) {
+                  for (var student in groupStudents) {
+                    if (student is String) {
+                      students.add(student);
+                    } else if (student is Map &&
+                        student.containsKey('rollNumber')) {
+                      students.add(student['rollNumber'].toString());
+                    }
                   }
                 }
               }
@@ -1087,13 +1310,13 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
           }
         }
 
-        // Remove duplicates and store
-        students = students.toSet().toList();
-        _groupStudents[groupName] = students;
+        // Convert to list and store
+        final studentsList = students.toList();
+        _groupStudents[groupName] = studentsList;
 
         if (mounted) {
           print(
-            'Loaded ${students.length} students for group $groupName: $students',
+            'Loaded ${studentsList.length} students for group $groupName: $studentsList',
           );
         }
       }
@@ -1111,132 +1334,370 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
     try {
       List<Map<String, dynamic>> records = [];
 
-      // Get all student check-ins from student_checkins collection
-      final checkinsQuery =
-          await FirebaseFirestore.instance.collection('student_checkins').get();
+      print('🔍 Loading attendance for subject: ${widget.subject}');
+      print('📅 Selected date: $_selectedDate');
+      print('📅 Selected date range: $_selectedDateRange');
 
-      for (var studentDoc in checkinsQuery.docs) {
-        final rollNumber = studentDoc.id;
+      // Try to get all student check-ins from student_checkins collection
+      QuerySnapshot? checkinsQuery;
 
-        // Get all sessions for this student
-        final sessionsQuery =
-            await studentDoc.reference.collection('sessions').get();
+      try {
+        // First, let's get all documents in student_checkins collection
+        print('🔍 Attempting to access student_checkins collection...');
+        checkinsQuery =
+            await FirebaseFirestore.instance
+                .collection('student_checkins')
+                .get();
+        print(
+          '👥 Collection query returned ${checkinsQuery.docs.length} documents',
+        );
 
-        for (var sessionDoc in sessionsQuery.docs) {
-          final sessionData = sessionDoc.data();
-          final studentData = sessionData['student'] as Map<String, dynamic>?;
-          final sessionSubject = sessionData['subject']?.toString() ?? '';
-          final sessionDate = sessionData['date'] as Timestamp?;
+        // List all document IDs if any exist
+        if (checkinsQuery.docs.isNotEmpty) {
+          final docIds = checkinsQuery.docs.map((doc) => doc.id).toList();
+          print('📋 Document IDs in student_checkins: $docIds');
 
-          // Filter by subject and date
-          if (sessionSubject == widget.subject && sessionDate != null) {
-            final sessionDateTime = sessionDate.toDate();
-            final isInDateRange =
-                _selectedDateRange == null ||
-                (sessionDateTime.isAfter(
-                      _selectedDateRange!.start.subtract(Duration(days: 1)),
-                    ) &&
-                    sessionDateTime.isBefore(
-                      _selectedDateRange!.end.add(Duration(days: 1)),
-                    ));
+          // Test access to first document
+          final firstDoc = checkinsQuery.docs.first;
+          print('🔍 Testing access to first document: ${firstDoc.id}');
+          final sessionsSnap =
+              await firstDoc.reference.collection('sessions').get();
+          print('   Sessions in ${firstDoc.id}: ${sessionsSnap.docs.length}');
 
-            final isInSelectedDate =
-                sessionDateTime.year == _selectedDate.year &&
-                sessionDateTime.month == _selectedDate.month &&
-                sessionDateTime.day == _selectedDate.day;
+          if (sessionsSnap.docs.isNotEmpty) {
+            final sampleSession = sessionsSnap.docs.first.data();
+            print('   Sample session subject: ${sampleSession['subject']}');
+            print('   Sample session student: ${sampleSession['student']}');
+          }
+        } else {
+          print('⚠️ No documents found in student_checkins collection');
 
-            if (_selectedDateRange != null ? isInDateRange : isInSelectedDate) {
-              // Get group information from the student data (stored in session)
-              final groupId = studentData?['groupId']?.toString() ?? '';
-              final groupName =
-                  studentData?['groupName']?.toString() ?? 'Unknown Group';
-
-              // Verify if student is enrolled in any group for this subject
-              bool isEnrolled = false;
-
-              // Check against the specific group from the session data
-              if (_groupStudents.containsKey(groupName)) {
-                isEnrolled = _groupStudents[groupName]!.contains(rollNumber);
+          // Let's try to check if any new documents were created recently
+          // by looking for specific roll numbers we know exist
+          final knownRollNumbers = ['23CSR071', '23CSR112', '23EEE029'];
+          for (String rollNumber in knownRollNumbers) {
+            try {
+              final testDoc =
+                  await FirebaseFirestore.instance
+                      .collection('student_checkins')
+                      .doc(rollNumber)
+                      .get();
+              if (testDoc.exists) {
+                print('✅ Found document for $rollNumber');
+                final sessions =
+                    await testDoc.reference.collection('sessions').get();
+                print('   Sessions: ${sessions.docs.length}');
+                checkinsQuery =
+                    await FirebaseFirestore.instance
+                        .collection('student_checkins')
+                        .get(); // Refresh the query
+                break;
+              } else {
+                print('❌ Document $rollNumber does not exist');
               }
-
-              // If not found in session group, check all groups as fallback
-              if (!isEnrolled) {
-                for (var groupStudentsList in _groupStudents.values) {
-                  if (groupStudentsList.contains(rollNumber)) {
-                    isEnrolled = true;
-                    break;
-                  }
-                }
-              }
-
-              // Calculate session duration if completed
-              double? durationMinutes;
-              if (sessionData['durationMinutes'] != null) {
-                durationMinutes =
-                    (sessionData['durationMinutes'] as num).toDouble();
-              } else if (sessionData['checkInAt'] != null &&
-                  sessionData['checkOutAt'] != null) {
-                final checkIn =
-                    (sessionData['checkInAt'] as Timestamp).toDate();
-                final checkOut =
-                    (sessionData['checkOutAt'] as Timestamp).toDate();
-                durationMinutes =
-                    checkOut.difference(checkIn).inMinutes.toDouble();
-              }
-
-              // Extract the day from the session data or calculate from date
-              String dayName = sessionData['day']?.toString() ?? '';
-              if (dayName.isEmpty) {
-                final weekday = sessionDateTime.weekday;
-                const dayNames = [
-                  'Monday',
-                  'Tuesday',
-                  'Wednesday',
-                  'Thursday',
-                  'Friday',
-                  'Saturday',
-                  'Sunday',
-                ];
-                dayName = dayNames[(weekday - 1) % 7];
-              }
-
-              records.add({
-                'sessionId': sessionDoc.id,
-                'rollNumber': rollNumber,
-                'studentName': studentData?['name'] ?? 'Unknown',
-                'studentEmail': studentData?['email'] ?? '',
-                'department': studentData?['department'] ?? '',
-                'groupId': groupId,
-                'groupName': groupName,
-                'subject': sessionSubject,
-                'period': sessionData['period'],
-                'roomOrLocation': sessionData['roomOrLocation'] ?? '',
-                'campus': sessionData['campus'] ?? '',
-                'checkInAt': sessionData['checkInAt'],
-                'checkOutAt': sessionData['checkOutAt'],
-                'expectedEndAt': sessionData['expectedEndAt'],
-                'status': sessionData['status'] ?? '',
-                'checkInLat': sessionData['checkInLat'],
-                'checkInLng': sessionData['checkInLng'],
-                'checkOutLat': sessionData['checkOutLat'],
-                'checkOutLng': sessionData['checkOutLng'],
-                'durationMinutes': durationMinutes,
-                'closeReason': sessionData['closeReason'],
-                'logs': sessionData['logs'] ?? [],
-                'date': sessionDate,
-                'isEnrolled': isEnrolled,
-                'day': dayName,
-              });
+            } catch (e) {
+              print('❌ Error accessing $rollNumber: $e');
             }
+          }
+        }
+      } catch (e) {
+        print('❌ Error accessing student_checkins collection: $e');
+        print('❌ Error type: ${e.runtimeType}');
+        print('❌ Error details: $e');
+
+        // Try alternative collection names
+        final alternativeNames = [
+          'student_check_ins',
+          'students_checkins',
+          'checkins',
+          'student_sessions',
+        ];
+        for (String altName in alternativeNames) {
+          try {
+            print('🔍 Trying alternative collection name: $altName');
+            checkinsQuery =
+                await FirebaseFirestore.instance.collection(altName).get();
+            print(
+              '✅ Found collection $altName with ${checkinsQuery.docs.length} documents',
+            );
+            break;
+          } catch (altError) {
+            print('❌ Collection $altName not found: $altError');
           }
         }
       }
 
-      // Apply filters
-      records = _applyFilters(records);
+      if (checkinsQuery == null || checkinsQuery.docs.isEmpty) {
+        print(
+          '⚠️ No student check-in documents found, trying refresh approach...',
+        );
 
-      setState(() => _attendanceRecords = records);
+        // Wait a moment and try again (in case of Firebase caching issues)
+        await Future.delayed(Duration(milliseconds: 500));
+
+        try {
+          checkinsQuery = await FirebaseFirestore.instance
+              .collection('student_checkins')
+              .get(GetOptions(source: Source.server)); // Force server fetch
+          print(
+            '🔄 Retry query returned ${checkinsQuery.docs.length} documents',
+          );
+        } catch (e) {
+          print('❌ Retry failed: $e');
+        }
+
+        if (checkinsQuery == null || checkinsQuery.docs.isEmpty) {
+          // Let's explore what collections are available
+          print('🔍 Exploring available Firestore collections...');
+          try {
+            // Try to list some known collections to see what's available
+            final knownCollections = [
+              'users',
+              'students',
+              'groups',
+              'timetables',
+              'attendance',
+            ];
+            for (String collection in knownCollections) {
+              try {
+                final testQuery =
+                    await FirebaseFirestore.instance
+                        .collection(collection)
+                        .limit(1)
+                        .get();
+                print(
+                  '✅ Collection "$collection" exists with ${testQuery.docs.length} documents (showing 1)',
+                );
+                if (testQuery.docs.isNotEmpty) {
+                  print(
+                    '   Sample document keys: ${testQuery.docs.first.data().keys.toList()}',
+                  );
+                }
+              } catch (e) {
+                print('❌ Collection "$collection" error: $e');
+              }
+            }
+
+            // Try to load students from the students collection as fallback
+            print(
+              '🔍 Attempting to use groups/{groupId}/students subcollection as fallback...',
+            );
+
+            // Get all groups to find students
+            for (var group in widget.groups) {
+              final groupId = group['groupId'];
+              final groupName = group['groupName'] ?? 'Unknown Group';
+
+              try {
+                final studentsSnap =
+                    await FirebaseFirestore.instance
+                        .collection('groups')
+                        .doc(groupId)
+                        .collection('students')
+                        .get();
+                print(
+                  '👥 Group $groupName has ${studentsSnap.docs.length} students in subcollection',
+                );
+
+                // Create dummy attendance records from students if needed
+                for (var studentDoc in studentsSnap.docs) {
+                  final studentData = studentDoc.data();
+                  final rollNumber = studentData['rollNumber']?.toString();
+
+                  if (rollNumber != null) {
+                    print('📝 Student: $rollNumber in group $groupName');
+                  }
+                }
+              } catch (e) {
+                print('❌ Error accessing groups/$groupId/students: $e');
+              }
+            }
+          } catch (e) {
+            print('❌ Error exploring collections: $e');
+          }
+
+          setState(() => _attendanceRecords = []);
+          return;
+        }
+      }
+
+      // Process all student documents
+      for (var studentDoc in checkinsQuery.docs) {
+        final rollNumber = studentDoc.id;
+        print('📚 Processing student: $rollNumber');
+
+        // Get all sessions for this student
+        QuerySnapshot sessionsQuery;
+        try {
+          sessionsQuery =
+              await studentDoc.reference.collection('sessions').get();
+          print(
+            '  � Student $rollNumber has ${sessionsQuery.docs.length} sessions',
+          );
+        } catch (e) {
+          print('  ❌ Error loading sessions for $rollNumber: $e');
+          continue;
+        }
+
+        for (var sessionDoc in sessionsQuery.docs) {
+          final sessionData = sessionDoc.data() as Map<String, dynamic>;
+          final studentData = sessionData['student'] as Map<String, dynamic>?;
+          final sessionSubject = sessionData['subject']?.toString() ?? '';
+          final sessionDate = sessionData['date'] as Timestamp?;
+
+          print(
+            '    � Session ${sessionDoc.id}: subject="$sessionSubject", date=${sessionDate?.toDate()}',
+          );
+
+          // First, load ALL records regardless of subject or date for debugging
+          if (sessionDate != null && studentData != null) {
+            final sessionDateTime = sessionDate.toDate();
+
+            // Get group information from the student data (stored in session)
+            final groupId = studentData['groupId']?.toString() ?? '';
+            final groupName =
+                studentData['groupName']?.toString() ?? 'Unknown Group';
+
+            // Calculate session duration if completed
+            double? durationMinutes;
+            if (sessionData['durationMinutes'] != null) {
+              durationMinutes =
+                  (sessionData['durationMinutes'] as num).toDouble();
+            } else if (sessionData['checkInAt'] != null &&
+                sessionData['checkOutAt'] != null) {
+              final checkIn = (sessionData['checkInAt'] as Timestamp).toDate();
+              final checkOut =
+                  (sessionData['checkOutAt'] as Timestamp).toDate();
+              durationMinutes =
+                  checkOut.difference(checkIn).inMinutes.toDouble();
+            }
+
+            // Extract the day from the session data or calculate from date
+            String dayName = sessionData['day']?.toString() ?? '';
+            if (dayName.isEmpty) {
+              final weekday = sessionDateTime.weekday;
+              const dayNames = [
+                'Monday',
+                'Tuesday',
+                'Wednesday',
+                'Thursday',
+                'Friday',
+                'Saturday',
+                'Sunday',
+              ];
+              dayName = dayNames[(weekday - 1) % 7];
+            }
+
+            // Create the record
+            final record = {
+              'sessionId': sessionDoc.id,
+              'rollNumber': rollNumber,
+              'studentName': studentData['name'] ?? 'Unknown',
+              'studentEmail': studentData['email'] ?? '',
+              'department': studentData['department'] ?? '',
+              'groupId': groupId,
+              'groupName': groupName,
+              'subject': sessionSubject,
+              'period': sessionData['period'],
+              'roomOrLocation': sessionData['roomOrLocation'] ?? '',
+              'campus': sessionData['campus'] ?? '',
+              'checkInAt': sessionData['checkInAt'],
+              'checkOutAt': sessionData['checkOutAt'],
+              'expectedEndAt': sessionData['expectedEndAt'],
+              'status': sessionData['status'] ?? '',
+              'checkInLat': sessionData['checkInLat'],
+              'checkInLng': sessionData['checkInLng'],
+              'checkOutLat': sessionData['checkOutLat'],
+              'checkOutLng': sessionData['checkOutLng'],
+              'durationMinutes': durationMinutes,
+              'closeReason': sessionData['closeReason'],
+              'logs': sessionData['logs'] ?? [],
+              'date': sessionDate,
+              'isEnrolled': true, // We'll determine this later
+              'day': dayName,
+            };
+
+            records.add(record);
+            print(
+              '    ✅ Added record for $rollNumber (${studentData['name']}) - Subject: $sessionSubject',
+            );
+          }
+        }
+      }
+
+      print('� Total records loaded before filtering: ${records.length}');
+
+      // Now apply filtering
+      List<Map<String, dynamic>> filteredRecords = [];
+
+      for (var record in records) {
+        bool matchesSubject = false;
+        bool matchesDate = false;
+
+        // Subject filter
+        final recordSubject = record['subject']?.toString() ?? '';
+        matchesSubject = recordSubject == widget.subject;
+
+        // Date filter
+        final recordDate = record['date'] as Timestamp?;
+        if (recordDate != null) {
+          final sessionDateTime = recordDate.toDate();
+
+          if (_selectedDateRange != null) {
+            matchesDate =
+                sessionDateTime.isAfter(
+                  _selectedDateRange!.start.subtract(Duration(days: 1)),
+                ) &&
+                sessionDateTime.isBefore(
+                  _selectedDateRange!.end.add(Duration(days: 1)),
+                );
+          } else {
+            // Show all records by default unless user specifically selected a date
+            matchesDate = true;
+          }
+        }
+
+        if (matchesSubject && matchesDate) {
+          // Check enrollment status
+          final rollNumber = record['rollNumber']?.toString() ?? '';
+          final groupName = record['groupName']?.toString() ?? '';
+
+          bool isEnrolled = false;
+          if (_groupStudents.containsKey(groupName)) {
+            isEnrolled = _groupStudents[groupName]!.contains(rollNumber);
+          }
+
+          if (!isEnrolled) {
+            for (var groupStudentsList in _groupStudents.values) {
+              if (groupStudentsList.contains(rollNumber)) {
+                isEnrolled = true;
+                break;
+              }
+            }
+          }
+
+          record['isEnrolled'] = isEnrolled;
+          filteredRecords.add(record);
+          print(
+            '    🎯 Record matches filters: $rollNumber - ${record['studentName']}',
+          );
+        }
+      }
+
+      print(
+        '🎯 Records matching subject filter ($widget.subject): ${records.where((r) => r['subject'] == widget.subject).length}',
+      );
+      print('🎯 Records matching date filter: ${filteredRecords.length}');
+
+      // Apply additional UI filters
+      filteredRecords = _applyFilters(filteredRecords);
+
+      print(
+        '🎯 Final attendance records count after all filters: ${filteredRecords.length}',
+      );
+      setState(() => _attendanceRecords = filteredRecords);
     } catch (e) {
+      print('❌ Error loading attendance: $e');
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -1394,18 +1855,21 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
               child: Icon(Icons.analytics_outlined, size: 24),
             ),
             SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.subject,
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                Text(
-                  'Statistics Dashboard',
-                  style: TextStyle(fontSize: 12, color: Colors.white70),
-                ),
-              ],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.subject,
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    'Statistics Dashboard',
+                    style: TextStyle(fontSize: 12, color: Colors.white70),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -1672,7 +2136,7 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        '${_attendanceRecords.length} records',
+                        '${_getTotalStudentCount()} students',
                         style: TextStyle(
                           fontSize: 14,
                           color: Color(0xFF1B5E20),
@@ -1710,11 +2174,9 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
                       'Status',
                       Icons.verified,
                       _selectedStatusFilter,
-                      ['All Status', 'Present', 'Ongoing', 'Absentees'],
+                      ['All Status', 'Present', 'Absentees'],
                       (value) => setState(() {
                         _selectedStatusFilter = value ?? 'All Status';
-                        _attendanceRecords = _applyFilters(_attendanceRecords);
-                        _calculateStats();
                       }),
                     ),
                   ),
@@ -1725,24 +2187,234 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
         ),
 
         // Enhanced Attendance List
-        Expanded(
-          child:
-              _attendanceRecords.isEmpty
-                  ? _buildEnhancedEmptyState()
-                  : ListView.builder(
-                    padding: EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: _attendanceRecords.length,
-                    itemBuilder: (context, index) {
-                      final record = _attendanceRecords[index];
-                      return AnimatedContainer(
-                        duration: Duration(milliseconds: 300),
-                        curve: Curves.easeOut,
-                        child: _buildEnhancedAttendanceCard(record, index),
-                      );
-                    },
-                  ),
-        ),
+        Expanded(child: _buildFilteredStudentsList()),
       ],
+    );
+  }
+
+  // Helper method to get students who are present
+  List<Map<String, dynamic>> _getPresentStudents() {
+    if (_selectedDateRange == null) {
+      // If we have no attendance records but have cached student data, use that instead
+      if (_attendanceRecords.isEmpty && _cachedStudentsData.isNotEmpty) {
+        List<Map<String, dynamic>> presentStudents = [];
+
+        // Get students from Excellent and Good categories (they have attendance)
+        for (var category in [
+          'Excellent (90-100%)',
+          'Good (75-89%)',
+          'Average (60-74%)',
+          'Below Average (40-59%)',
+        ]) {
+          for (var student in _cachedStudentsData[category] ?? []) {
+            print(
+              '[DEBUG] Adding present student: ${student['rollNumber']} - ${student['studentName']} - ${student['attendanceRate']}%',
+            );
+            presentStudents.add({
+              'rollNumber': student['rollNumber'],
+              'studentName': student['studentName'] ?? 'Unknown',
+              'name': student['studentName'] ?? 'Unknown',
+              'status': 'completed', // Simulated status
+              'groupId': student['groupId'],
+              'attendancePercentage':
+                  student['attendanceRate']?.toDouble() ?? 0.0,
+            });
+          }
+        }
+
+        print(
+          '[DEBUG] Present students from cached data: ${presentStudents.length}',
+        );
+        print(
+          '[DEBUG] Present students: ${presentStudents.map((s) => s['rollNumber']).toList()}',
+        );
+        return presentStudents;
+      }
+
+      // When no specific date range is selected, return unique students who have any check-in record
+      Map<String, Map<String, dynamic>> uniqueStudents = {};
+      for (var record in _attendanceRecords) {
+        String rollNumber = record['rollNumber'] ?? '';
+        if (rollNumber.isNotEmpty &&
+            (record['status'] == 'completed' ||
+                record['status'] == 'checked_in')) {
+          uniqueStudents[rollNumber] = record;
+        }
+      }
+      print('[DEBUG] Present students found: ${uniqueStudents.length}');
+      print(
+        '[DEBUG] Present students: ${uniqueStudents.values.map((s) => s['rollNumber']).toList()}',
+      );
+      return uniqueStudents.values.toList();
+    } else {
+      // When a specific date range is selected, return students present in that range
+      return _attendanceRecords
+          .where(
+            (r) => r['status'] == 'completed' || r['status'] == 'checked_in',
+          )
+          .toList();
+    }
+  }
+
+  // Helper method to get students who are absent
+  List<Map<String, dynamic>> _getAbsentStudents() {
+    if (_selectedDateRange == null) {
+      // If we have no attendance records but have cached student data, use that instead
+      if (_attendanceRecords.isEmpty && _cachedStudentsData.isNotEmpty) {
+        List<Map<String, dynamic>> absentStudents = [];
+
+        // Get students from Poor category (they have no attendance)
+        for (var student in _cachedStudentsData['Poor (0-39%)'] ?? []) {
+          print(
+            '[DEBUG] Adding absent student: ${student['rollNumber']} - ${student['studentName']} - ${student['attendanceRate']}%',
+          );
+          absentStudents.add({
+            'rollNumber': student['rollNumber'],
+            'studentName': student['studentName'] ?? 'Unknown',
+            'name': student['studentName'] ?? 'Unknown',
+            'status': 'absent',
+            'groupId': student['groupId'],
+            'attendancePercentage':
+                student['attendanceRate']?.toDouble() ?? 0.0,
+          });
+        }
+
+        print(
+          '[DEBUG] Absent students from cached data: ${absentStudents.length}',
+        );
+        print(
+          '[DEBUG] Absent students: ${absentStudents.map((s) => s['rollNumber']).toList()}',
+        );
+        return absentStudents;
+      }
+
+      // When no specific date range is selected, find enrolled students without any attendance records
+      Set<String> presentStudentRolls =
+          _getPresentStudents()
+              .map((s) => s['rollNumber'] as String)
+              .where((roll) => roll.isNotEmpty)
+              .toSet();
+
+      print('[DEBUG] Present student rolls: $presentStudentRolls');
+
+      // Get all enrolled students for this group from cached data
+      List<Map<String, dynamic>> absentStudents = [];
+      for (var group in _cachedStudentsData.values) {
+        for (var student in group) {
+          String rollNumber = student['rollNumber'] ?? '';
+          if (rollNumber.isNotEmpty &&
+              !presentStudentRolls.contains(rollNumber)) {
+            absentStudents.add({
+              'rollNumber': rollNumber,
+              'name': student['name'] ?? 'Unknown',
+              'status': 'absent',
+              'timestamp': null,
+              'groupId': student['groupId'],
+            });
+          }
+        }
+      }
+      print('[DEBUG] Absent students found: ${absentStudents.length}');
+      print(
+        '[DEBUG] Absent students: ${absentStudents.map((s) => s['rollNumber']).toList()}',
+      );
+      return absentStudents;
+    } else {
+      // When a specific date range is selected, return students marked as absent in that range
+      return _attendanceRecords.where((r) => r['status'] == 'absent').toList();
+    }
+  }
+
+  int _getTotalStudentCount() {
+    // If we have attendance records, use those
+    if (_attendanceRecords.isNotEmpty) {
+      return _attendanceRecords.length;
+    }
+
+    // Otherwise, count all students from cached data
+    int totalCount = 0;
+    for (var studentList in _cachedStudentsData.values) {
+      totalCount += studentList.length;
+    }
+    return totalCount;
+  }
+
+  Widget _buildFilteredStudentsList() {
+    // Get students based on status filter
+    List<Map<String, dynamic>> studentsToShow = [];
+
+    switch (_selectedStatusFilter) {
+      case 'Present':
+        studentsToShow = _getPresentStudents();
+        break;
+      case 'Absentees':
+        studentsToShow = _getAbsentStudents();
+        break;
+      case 'All Status':
+      default:
+        // Show all students (present + absent)
+        studentsToShow = [];
+        studentsToShow.addAll(_getPresentStudents());
+        studentsToShow.addAll(_getAbsentStudents());
+        break;
+    }
+
+    // If no students found with current filter but we have cached data, show message
+    if (studentsToShow.isEmpty &&
+        _cachedStudentsData.values.any((list) => list.isNotEmpty)) {
+      return Center(
+        child: Container(
+          padding: EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Color(0xFF1B5E20).withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.filter_list_off,
+                  size: 48,
+                  color: Color(0xFF1B5E20),
+                ),
+              ),
+              SizedBox(height: 24),
+              Text(
+                'No Students Found',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[700],
+                ),
+              ),
+              SizedBox(height: 12),
+              Text(
+                'No students match the current filter: $_selectedStatusFilter',
+                style: TextStyle(color: Colors.grey[600]),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // If no students at all, show empty state
+    if (studentsToShow.isEmpty) {
+      return _buildEnhancedEmptyState();
+    }
+
+    // Show students in list format (small horizontal rows)
+    return ListView.builder(
+      padding: EdgeInsets.all(16),
+      itemCount: studentsToShow.length,
+      itemBuilder: (context, index) {
+        final student = studentsToShow[index];
+        final isPresent = student['status'] != 'absent';
+        return _buildStudentRowCard(student, isPresent);
+      },
     );
   }
 
@@ -1761,33 +2433,211 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
     );
   }
 
+  Widget _buildStudentRowCard(Map<String, dynamic> record, bool isPresent) {
+    final rollNumber = record['rollNumber'] ?? 'Unknown';
+    final studentName = record['studentName'] ?? record['name'] ?? 'Unknown';
+    final checkInTime =
+        record['checkInAt'] != null
+            ? (record['checkInAt'] as Timestamp).toDate()
+            : null;
+    final attendancePercentage = record['attendancePercentage'];
+
+    // Debug print to see what data we're getting
+    print(
+      '[DEBUG] Building card for $rollNumber: name=$studentName, percentage=$attendancePercentage',
+    );
+
+    return Container(
+      margin: EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isPresent ? Colors.green[200]! : Colors.red[200]!,
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 6,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Row(
+          children: [
+            // Status indicator circle
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: isPresent ? Colors.green[50] : Colors.red[50],
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isPresent ? Colors.green[300]! : Colors.red[300]!,
+                  width: 2,
+                ),
+              ),
+              child: Icon(
+                isPresent ? Icons.check : Icons.close,
+                color: isPresent ? Colors.green[600] : Colors.red[600],
+                size: 20,
+              ),
+            ),
+            SizedBox(width: 16),
+
+            // Student info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    rollNumber,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Colors.grey[800],
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    studentName,
+                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+
+            // Status badge and additional info
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: isPresent ? Colors.green[600] : Colors.red[600],
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    isPresent ? 'Present' : 'Absent',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                SizedBox(height: 4),
+
+                // Show attendance percentage (always show if available, even if 0)
+                if (attendancePercentage != null)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.percent, size: 14, color: Colors.grey[500]),
+                      SizedBox(width: 2),
+                      Text(
+                        '${attendancePercentage.toInt()}%',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  )
+                else if (checkInTime != null)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.access_time,
+                        size: 14,
+                        color: Colors.grey[500],
+                      ),
+                      SizedBox(width: 2),
+                      Text(
+                        '${checkInTime.hour.toString().padLeft(2, '0')}:${checkInTime.minute.toString().padLeft(2, '0')}',
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildEnhancedStatsCards() {
+    // Calculate real stats from cached student data
+    int totalStudents = 0;
+    int excellentStudents = 0;
+    int goodStudents = 0;
+    int poorStudents = 0;
+    double totalAttendanceRate = 0;
+    int studentsWithAttendance = 0;
+
+    for (var entry in _cachedStudentsData.entries) {
+      final categoryStudents = entry.value;
+      totalStudents += categoryStudents.length;
+
+      switch (entry.key) {
+        case 'Excellent (90-100%)':
+          excellentStudents = categoryStudents.length;
+          break;
+        case 'Good (75-89%)':
+          goodStudents = categoryStudents.length;
+          break;
+        case 'Poor (0-39%)':
+          poorStudents = categoryStudents.length;
+          break;
+      }
+
+      // Calculate average attendance rate
+      for (var student in categoryStudents) {
+        final rate = student['attendanceRate']?.toDouble() ?? 0.0;
+        totalAttendanceRate += rate;
+        studentsWithAttendance++;
+      }
+    }
+
+    final averageAttendanceRate =
+        studentsWithAttendance > 0
+            ? (totalAttendanceRate / studentsWithAttendance).round()
+            : 0;
+
     final stats = [
       {
-        'title': 'Total Sessions',
-        'value': '${_attendanceStats['totalSessions'] ?? 0}',
-        'icon': Icons.assignment_outlined,
+        'title': 'Total Students',
+        'value': '$totalStudents',
+        'icon': Icons.people_outline,
         'color': Color(0xFF1976D2),
         'gradient': [Color(0xFF1976D2), Color(0xFF1565C0)],
       },
       {
-        'title': 'Completed',
-        'value': '${_attendanceStats['completedSessions'] ?? 0}',
-        'icon': Icons.check_circle_outline,
+        'title': 'Excellent Rate',
+        'value': '$excellentStudents',
+        'icon': Icons.star_outline,
         'color': Color(0xFF2E7D32),
         'gradient': [Color(0xFF2E7D32), Color(0xFF1B5E20)],
       },
       {
-        'title': 'Ongoing',
-        'value': '${_attendanceStats['ongoingSessions'] ?? 0}',
-        'icon': Icons.schedule_outlined,
+        'title': 'Avg Attendance',
+        'value': '$averageAttendanceRate%',
+        'icon': Icons.trending_up,
         'color': Color(0xFFE65100),
         'gradient': [Color(0xFFE65100), Color(0xFFBF360C)],
       },
       {
-        'title': 'Absentees',
-        'value': '${_attendanceStats['absenteeStudents'] ?? 0}',
-        'icon': Icons.person_off_outlined,
+        'title': 'Poor Attendance',
+        'value': '$poorStudents',
+        'icon': Icons.trending_down,
         'color': Color(0xFFD32F2F),
         'gradient': [Color(0xFFD32F2F), Color(0xFFC62828)],
       },
@@ -2298,6 +3148,20 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
   }
 
   Widget _buildEnhancedAttendanceTrendChart() {
+    // Calculate attendance distribution from cached data
+    Map<String, int> attendanceDistribution = {};
+    Map<String, Color> categoryColors = {
+      'Excellent (90-100%)': Color(0xFF2E7D32),
+      'Good (75-89%)': Color(0xFF66BB6A),
+      'Average (60-74%)': Color(0xFFFFA726),
+      'Below Average (40-59%)': Color(0xFFFF7043),
+      'Poor (0-39%)': Color(0xFFE57373),
+    };
+
+    for (var entry in _cachedStudentsData.entries) {
+      attendanceDistribution[entry.key] = entry.value.length;
+    }
+
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -2329,7 +3193,7 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
                     ),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(Icons.trending_up, color: Colors.white, size: 24),
+                  child: Icon(Icons.analytics, color: Colors.white, size: 24),
                 ),
                 SizedBox(width: 16),
                 Expanded(
@@ -2337,7 +3201,7 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Attendance Trends',
+                        'Attendance Distribution',
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
@@ -2345,7 +3209,7 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
                         ),
                       ),
                       Text(
-                        'Visual analytics coming soon',
+                        'Student performance breakdown',
                         style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                       ),
                     ],
@@ -2354,54 +3218,91 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
               ],
             ),
             SizedBox(height: 24),
-            Container(
-              height: 180,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Color(0xFF1B5E20).withOpacity(0.1),
-                    Color(0xFF2E7D32).withOpacity(0.05),
-                  ],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Color(0xFF1B5E20).withOpacity(0.2)),
-              ),
-              child: Center(
+
+            // Attendance category bars
+            ...attendanceDistribution.entries.map((entry) {
+              final category = entry.key;
+              final count = entry.value;
+              final maxCount =
+                  attendanceDistribution.values.isNotEmpty
+                      ? attendanceDistribution.values.reduce(
+                        (a, b) => a > b ? a : b,
+                      )
+                      : 1;
+              final percentage = maxCount > 0 ? (count / maxCount) : 0.0;
+
+              return Container(
+                margin: EdgeInsets.only(bottom: 16),
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            category.replaceAll('(', '\n('),
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey[700],
+                              height: 1.2,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: categoryColors[category]?.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color:
+                                  categoryColors[category]?.withOpacity(0.3) ??
+                                  Colors.grey,
+                            ),
+                          ),
+                          child: Text(
+                            '$count',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: categoryColors[category],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 8),
                     Container(
-                      padding: EdgeInsets.all(16),
+                      height: 8,
                       decoration: BoxDecoration(
-                        color: Color(0xFF1B5E20).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(50),
+                        color: Colors.grey[200],
+                        borderRadius: BorderRadius.circular(4),
                       ),
-                      child: Icon(
-                        Icons.analytics,
-                        size: 48,
-                        color: Color(0xFF1B5E20),
+                      child: FractionallySizedBox(
+                        alignment: Alignment.centerLeft,
+                        widthFactor: percentage,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                categoryColors[category] ?? Colors.grey,
+                                (categoryColors[category] ?? Colors.grey)
+                                    .withOpacity(0.7),
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
                       ),
-                    ),
-                    SizedBox(height: 16),
-                    Text(
-                      'Interactive Charts',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF1B5E20),
-                      ),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      'Coming Soon',
-                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                     ),
                   ],
                 ),
-              ),
-            ),
+              );
+            }).toList(),
           ],
         ),
       ),
@@ -2409,18 +3310,73 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
   }
 
   Widget _buildEnhancedGroupWiseStats() {
-    Map<String, Map<String, int>> groupStats = {};
+    // Calculate group-wise stats from cached student data
+    Map<String, Map<String, dynamic>> groupStats = {};
 
-    for (var record in _attendanceRecords) {
-      final groupName = record['groupName'] ?? 'Unknown';
-      if (!groupStats.containsKey(groupName)) {
-        groupStats[groupName] = {'present': 0, 'total': 0};
-      }
-      groupStats[groupName]!['total'] =
-          (groupStats[groupName]!['total'] ?? 0) + 1;
-      if (record['status'] == 'completed') {
-        groupStats[groupName]!['present'] =
-            (groupStats[groupName]!['present'] ?? 0) + 1;
+    // Get group information from widget.groups
+    for (var group in widget.groups) {
+      final groupName = group['groupName'] ?? 'Unknown Group';
+      groupStats[groupName] = {
+        'totalStudents': 0,
+        'excellentStudents': 0,
+        'goodStudents': 0,
+        'averageStudents': 0,
+        'belowAverageStudents': 0,
+        'poorStudents': 0,
+        'averageAttendanceRate': 0.0,
+      };
+    }
+
+    // Calculate stats from cached student data
+    for (var entry in _cachedStudentsData.entries) {
+      final category = entry.key;
+      final students = entry.value;
+
+      for (var student in students) {
+        final studentGroupName = student['groupName'] ?? 'Unknown Group';
+
+        if (groupStats.containsKey(studentGroupName)) {
+          groupStats[studentGroupName]!['totalStudents'] =
+              (groupStats[studentGroupName]!['totalStudents'] as int) + 1;
+
+          final attendanceRate = student['attendanceRate']?.toDouble() ?? 0.0;
+          final currentAvg =
+              groupStats[studentGroupName]!['averageAttendanceRate'] as double;
+          final totalStudents =
+              groupStats[studentGroupName]!['totalStudents'] as int;
+
+          // Update average attendance rate
+          groupStats[studentGroupName]!['averageAttendanceRate'] =
+              ((currentAvg * (totalStudents - 1)) + attendanceRate) /
+              totalStudents;
+
+          // Categorize student
+          switch (category) {
+            case 'Excellent (90-100%)':
+              groupStats[studentGroupName]!['excellentStudents'] =
+                  (groupStats[studentGroupName]!['excellentStudents'] as int) +
+                  1;
+              break;
+            case 'Good (75-89%)':
+              groupStats[studentGroupName]!['goodStudents'] =
+                  (groupStats[studentGroupName]!['goodStudents'] as int) + 1;
+              break;
+            case 'Average (60-74%)':
+              groupStats[studentGroupName]!['averageStudents'] =
+                  (groupStats[studentGroupName]!['averageStudents'] as int) + 1;
+              break;
+            case 'Below Average (40-59%)':
+              groupStats[studentGroupName]!['belowAverageStudents'] =
+                  (groupStats[studentGroupName]!['belowAverageStudents']
+                      as int) +
+                  1;
+              break;
+            case 'Poor (0-39%)':
+              groupStats[studentGroupName]!['poorStudents'] =
+                  (groupStats[studentGroupName]!['poorStudents'] as int) + 1;
+              break;
+          }
+        }
       }
     }
 
@@ -2498,15 +3454,17 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
               ...groupStats.entries.map((entry) {
                 final groupName = entry.key;
                 final stats = entry.value;
-                final total = stats['total'] ?? 0;
-                final present = stats['present'] ?? 0;
-                final percentage =
-                    total > 0 ? (present / total * 100).round() : 0;
+                final totalStudents = stats['totalStudents'] as int;
+                final excellentStudents = stats['excellentStudents'] as int;
+                final goodStudents = stats['goodStudents'] as int;
+                final poorStudents = stats['poorStudents'] as int;
+                final averageAttendanceRate =
+                    (stats['averageAttendanceRate'] as double).round();
 
                 Color performanceColor =
-                    percentage >= 80
+                    averageAttendanceRate >= 80
                         ? Color(0xFF2E7D32)
-                        : percentage >= 60
+                        : averageAttendanceRate >= 60
                         ? Color(0xFFE65100)
                         : Color(0xFFD32F2F);
 
@@ -2548,7 +3506,7 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
                                 ),
                                 SizedBox(height: 4),
                                 Text(
-                                  '$total total sessions',
+                                  '$totalStudents total students',
                                   style: TextStyle(
                                     fontSize: 14,
                                     color: Colors.grey[600],
@@ -2571,86 +3529,45 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
                               ),
                               borderRadius: BorderRadius.circular(20),
                             ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  percentage >= 80
-                                      ? Icons.trending_up
-                                      : percentage >= 60
-                                      ? Icons.trending_flat
-                                      : Icons.trending_down,
-                                  color: Colors.white,
-                                  size: 18,
-                                ),
-                                SizedBox(width: 8),
-                                Text(
-                                  '$present/$total',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                              ],
+                            child: Text(
+                              '$averageAttendanceRate%',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
                             ),
                           ),
                         ],
                       ),
                       SizedBox(height: 16),
+                      // Student category breakdown
                       Row(
                         children: [
                           Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      'Attendance Rate',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: Colors.grey[700],
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    Text(
-                                      '$percentage%',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        color: performanceColor,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                SizedBox(height: 8),
-                                Container(
-                                  height: 8,
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey[200],
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: FractionallySizedBox(
-                                    alignment: Alignment.centerLeft,
-                                    widthFactor:
-                                        total > 0 ? present / total : 0,
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          colors: [
-                                            performanceColor,
-                                            performanceColor.withOpacity(0.8),
-                                          ],
-                                        ),
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
+                            child: _buildStatItem(
+                              'Excellent',
+                              excellentStudents.toString(),
+                              Color(0xFF2E7D32),
+                              Icons.check_circle,
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: _buildStatItem(
+                              'Good',
+                              goodStudents.toString(),
+                              Color(0xFF66BB6A),
+                              Icons.trending_up,
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: _buildStatItem(
+                              'Poor',
+                              poorStudents.toString(),
+                              Color(0xFFE57373),
+                              Icons.warning,
                             ),
                           ),
                         ],
@@ -2658,7 +3575,7 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
                     ],
                   ),
                 );
-              }),
+              }).toList(),
           ],
         ),
       ),
@@ -2669,8 +3586,11 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
   _loadAllStudentsInGroups() async {
     try {
       Map<String, List<Map<String, dynamic>>> groupedStudents = {
-        'Enrolled': [],
-        'Absentees': [],
+        'Excellent (90-100%)': [],
+        'Good (75-89%)': [],
+        'Average (60-74%)': [],
+        'Below Average (40-59%)': [],
+        'Poor (0-39%)': [],
       };
 
       // Get groups passed from the parent widget
@@ -2678,94 +3598,134 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
 
       print('🔍 Loading students for ${teacherGroups.length} groups...');
 
-      // Debug: List all available groups in Firestore
-      try {
-        final allGroupsQuery =
-            await FirebaseFirestore.instance.collection('groups').get();
-        print('🏫 Available groups in Firestore:');
-        for (var doc in allGroupsQuery.docs) {
-          print('   - ${doc.id}: ${doc.data()['name'] ?? 'Unknown Name'}');
-        }
-      } catch (e) {
-        print('❌ Error fetching all groups: $e');
-      }
-
       for (var group in teacherGroups) {
         final groupName = group['groupName'] ?? 'Unknown Group';
-        final originalGroupId = group['groupId'];
+        final groupId = group['groupId'];
 
         print('📚 Processing group: $groupName');
-        print('🔑 Original Group ID: "$originalGroupId"');
-        print('📋 Full group data: $group');
+        print('🔑 Group ID: "$groupId"');
 
-        // Find the correct group ID by querying with group name
-        String? correctGroupId;
+        // Verify the group ID is correct by checking available groups
         try {
           final allGroupsQuery =
               await FirebaseFirestore.instance.collection('groups').get();
+
+          String? correctGroupId;
           for (var doc in allGroupsQuery.docs) {
-            final groupData = doc.data();
-            if (groupData['name'] == groupName) {
+            final data = doc.data();
+            final name = data['name'] ?? 'Unknown';
+
+            // Check if this matches our group name exactly
+            if (name == groupName) {
               correctGroupId = doc.id;
               print(
-                '✅ Found correct group ID: $correctGroupId for group name: $groupName',
+                '🔄 Found correct group ID: $correctGroupId for group $groupName',
               );
               break;
             }
           }
+
+          // Use the correct group ID if found
+          if (correctGroupId != null && correctGroupId != groupId) {
+            print('🔄 Updating group ID from $groupId to $correctGroupId');
+            group['groupId'] = correctGroupId;
+          }
         } catch (e) {
-          print('❌ Error finding correct group ID: $e');
+          print('❌ Error verifying group ID: $e');
         }
 
-        if (correctGroupId == null) {
-          print('⚠️ Could not find correct group ID for group: $groupName');
-          continue;
-        }
+        final finalGroupId = group['groupId'];
 
-        // Try to get students from groups collection (students subcollection)
+        // STEP 1: Load ALL students from groups/{groupId}/students subcollection
         try {
           print(
-            '🔎 Querying students subcollection for group $correctGroupId...',
+            '📚 Loading ALL students from groups/$finalGroupId/students subcollection...',
           );
-
           final studentsQuery =
               await FirebaseFirestore.instance
                   .collection('groups')
-                  .doc(correctGroupId)
+                  .doc(finalGroupId)
                   .collection('students')
                   .get();
 
           print(
-            '📊 Students query result: ${studentsQuery.docs.length} documents found',
+            '👥 Found ${studentsQuery.docs.length} total students in group $groupName',
           );
 
-          if (studentsQuery.docs.isEmpty) {
-            print('⚠️ No students found in subcollection for group $groupName');
-          } else {
-            print('📋 Processing ${studentsQuery.docs.length} students...');
-          }
-
+          // STEP 2: For each student, check their attendance in student_checkins
           for (var studentDoc in studentsQuery.docs) {
             final studentData = studentDoc.data();
-            final studentId = studentDoc.id; // Auto-generated document ID
             final rollNumber = studentData['rollNumber'] ?? 'Unknown';
+            final studentName =
+                studentData['name'] ?? studentData['studentName'] ?? 'Unknown';
+            final studentEmail =
+                studentData['email'] ?? studentData['studentEmail'] ?? '';
 
-            print(
-              '👤 Processing student: ID=$studentId, Roll=$rollNumber, Name=${studentData['name'] ?? 'Unknown'}',
-            );
+            print('🔍 Checking attendance for student: $rollNumber');
 
-            // Create student record with group information
+            // STEP 3: Check attendance records for this student
+            bool hasAttendanceToday = false;
+            Map<String, dynamic>? latestSession;
+            int totalSessions = 0;
+            int attendedSessions = 0;
+
+            try {
+              // Get ALL sessions for this student in this subject
+              final allSessionsQuery =
+                  await FirebaseFirestore.instance
+                      .collection('student_checkins')
+                      .doc(rollNumber)
+                      .collection('sessions')
+                      .where('subject', isEqualTo: widget.subject)
+                      .get();
+
+              totalSessions = allSessionsQuery.docs.length;
+              attendedSessions =
+                  allSessionsQuery.docs
+                      .where(
+                        (doc) =>
+                            doc.data()['status'] == 'completed' ||
+                            doc.data()['status'] == 'checked_in',
+                      )
+                      .length;
+
+              // Check for today's attendance specifically
+              final todaySessionsQuery =
+                  await FirebaseFirestore.instance
+                      .collection('student_checkins')
+                      .doc(rollNumber)
+                      .collection('sessions')
+                      .where('subject', isEqualTo: widget.subject)
+                      .where(
+                        'date',
+                        isEqualTo:
+                            _selectedDate.toIso8601String().split('T')[0],
+                      )
+                      .get();
+
+              if (todaySessionsQuery.docs.isNotEmpty) {
+                hasAttendanceToday = true;
+                latestSession = todaySessionsQuery.docs.first.data();
+                print(
+                  '✅ Found attendance record for $rollNumber in subject ${widget.subject} (Total: $totalSessions sessions, Attended: $attendedSessions)',
+                );
+              } else {
+                print(
+                  '❌ No attendance record found for $rollNumber in subject ${widget.subject} on ${_selectedDate.toIso8601String().split('T')[0]} (Total: $totalSessions sessions, Attended: $attendedSessions)',
+                );
+              }
+            } catch (e) {
+              print('⚠️ Error checking attendance for $rollNumber: $e');
+            }
+
+            // STEP 4: Create student record with attendance status
             final studentRecord = {
-              'id': studentId,
+              'id': studentDoc.id,
               'rollNumber': rollNumber,
-              'studentName':
-                  studentData['name'] ??
-                  studentData['studentName'] ??
-                  'Unknown',
-              'studentEmail':
-                  studentData['email'] ?? studentData['studentEmail'] ?? '',
+              'studentName': studentName,
+              'studentEmail': studentEmail,
               'department': studentData['department'] ?? '',
-              'groupId': correctGroupId,
+              'groupId': finalGroupId,
               'groupName': groupName,
               'isEnrolled': true,
               'phone': studentData['phone'] ?? '',
@@ -2774,174 +3734,80 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
               'admissionYear': studentData['admissionYear'] ?? '',
               'biometricRegistered':
                   studentData['biometricRegistered'] ?? false,
-              'createdAt': studentData['createdAt'],
-              // Add attendance statistics (will be calculated later if needed)
-              'totalSessions': 0,
-              'attendedSessions': 0,
-              'attendanceRate': 0,
+              'totalSessions': totalSessions,
+              'attendedSessions': attendedSessions,
+              'attendanceRate':
+                  totalSessions > 0
+                      ? ((attendedSessions / totalSessions) * 100).round()
+                      : 0,
+              'hasAttendanceToday': hasAttendanceToday,
+              'latestSession': latestSession,
             };
 
-            groupedStudents['Enrolled']!.add(studentRecord);
+            // STEP 5: Add to appropriate list based on attendance rate
+            final attendanceRate =
+                totalSessions > 0
+                    ? ((attendedSessions / totalSessions) * 100).round()
+                    : 0;
+            String groupKey;
+
+            if (attendanceRate >= 90) {
+              groupKey = 'Excellent (90-100%)';
+            } else if (attendanceRate >= 75) {
+              groupKey = 'Good (75-89%)';
+            } else if (attendanceRate >= 60) {
+              groupKey = 'Average (60-74%)';
+            } else if (attendanceRate >= 40) {
+              groupKey = 'Below Average (40-59%)';
+            } else {
+              groupKey = 'Poor (0-39%)';
+            }
+
+            groupedStudents[groupKey]!.add(studentRecord);
+            print(
+              '✅ Added $rollNumber to $groupKey (${attendanceRate}% attendance)',
+            );
           }
 
-          print(
-            '✅ Found ${studentsQuery.docs.length} students in subcollection for group $groupName',
-          );
+          print('📊 Final count by attendance rate:');
+          for (var entry in groupedStudents.entries) {
+            if (entry.value.isNotEmpty) {
+              print('   ${entry.key}: ${entry.value.length} students');
+            }
+          }
         } catch (e) {
           print(
-            '⚠️ Error accessing students subcollection for group $correctGroupId: $e',
+            '❌ Error loading students from groups/$finalGroupId/students: $e',
           );
-        }
-
-        // If no students found in subcollection, try to get from group document itself
-        if (groupedStudents['Enrolled']!
-            .where((s) => s['groupId'] == correctGroupId)
-            .isEmpty) {
-          try {
-            final groupDoc =
-                await FirebaseFirestore.instance
-                    .collection('groups')
-                    .doc(correctGroupId)
-                    .get();
-
-            if (groupDoc.exists) {
-              final groupData = groupDoc.data();
-              if (groupData != null && groupData.containsKey('students')) {
-                final groupStudents = groupData['students'];
-                if (groupStudents is List) {
-                  for (var student in groupStudents) {
-                    String rollNumber = '';
-                    String studentName = 'Unknown';
-                    String studentEmail = '';
-                    String department = '';
-
-                    if (student is String) {
-                      // Student is just a roll number string
-                      rollNumber = student;
-                    } else if (student is Map<String, dynamic>) {
-                      // Student is an object with details
-                      rollNumber =
-                          student['rollNumber']?.toString() ??
-                          student['roll']?.toString() ??
-                          student['id']?.toString() ??
-                          '';
-                      studentName =
-                          student['name']?.toString() ??
-                          student['studentName']?.toString() ??
-                          'Unknown';
-                      studentEmail =
-                          student['email']?.toString() ??
-                          student['studentEmail']?.toString() ??
-                          '';
-                      department = student['department']?.toString() ?? '';
-                    }
-
-                    if (rollNumber.isNotEmpty) {
-                      final studentRecord = {
-                        'rollNumber': rollNumber,
-                        'studentName': studentName,
-                        'studentEmail': studentEmail,
-                        'department': department,
-                        'groupId': correctGroupId,
-                        'groupName': groupName,
-                        'isEnrolled': true,
-                        'phone': '',
-                        'year': '',
-                        'section': '',
-                        'admissionYear': '',
-                        'totalSessions': 0,
-                        'attendedSessions': 0,
-                        'attendanceRate': 0,
-                      };
-
-                      groupedStudents['Enrolled']!.add(studentRecord);
-                    }
-                  }
-                }
-              }
-            }
-            print(
-              '✅ Found ${groupedStudents['Enrolled']!.where((s) => s['groupId'] == correctGroupId).length} students in group document for $groupName',
-            );
-          } catch (e) {
-            print('⚠️ Error accessing group document for $correctGroupId: $e');
-          }
         }
       }
 
-      // Calculate attendance statistics for enrolled students
-      await _calculateStudentAttendanceStats(groupedStudents['Enrolled']!);
+      _cachedStudentsData = groupedStudents;
+      _studentsDataLoaded = true;
 
-      // Add absentees from attendance records (students who attended but are not in any group)
-      for (var record in _attendanceRecords) {
-        if (record['isEnrolled'] == false) {
-          // Check if this student is already in the absentees list
-          bool alreadyExists = groupedStudents['Absentees']!.any(
-            (student) => student['rollNumber'] == record['rollNumber'],
-          );
-
-          if (!alreadyExists) {
-            groupedStudents['Absentees']!.add({
-              'rollNumber': record['rollNumber'],
-              'studentName': record['studentName'] ?? 'Unknown',
-              'studentEmail': record['studentEmail'] ?? '',
-              'department': record['department'] ?? '',
-              'groupId': record['groupId'] ?? '',
-              'groupName': record['groupName'] ?? 'Unknown Group',
-              'isEnrolled': false,
-              'phone': '',
-              'year': '',
-              'section': '',
-              'admissionYear': '',
-              'totalSessions': 1,
-              'attendedSessions': record['status'] == 'completed' ? 1 : 0,
-              'attendanceRate': record['status'] == 'completed' ? 100 : 0,
-            });
-          }
-        }
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
       }
-
-      print(
-        '📊 Final count - Enrolled: ${groupedStudents['Enrolled']!.length}, Absentees: ${groupedStudents['Absentees']!.length}',
-      );
 
       return groupedStudents;
     } catch (e) {
-      print('❌ Error loading all students: $e');
-      throw Exception('Failed to load students: $e');
-    }
-  }
-
-  Future<void> _calculateStudentAttendanceStats(
-    List<Map<String, dynamic>> students,
-  ) async {
-    try {
-      for (var student in students) {
-        final rollNumber = student['rollNumber'];
-        int totalSessions = 0;
-        int attendedSessions = 0;
-
-        // Count attendance sessions for this student in the current subject
-        for (var record in _attendanceRecords) {
-          if (record['rollNumber'] == rollNumber &&
-              record['subject'] == widget.subject) {
-            totalSessions++;
-            if (record['status'] == 'completed') {
-              attendedSessions++;
-            }
-          }
-        }
-
-        // Update student record with attendance stats
-        student['totalSessions'] = totalSessions;
-        student['attendedSessions'] = attendedSessions;
-        student['attendanceRate'] =
-            totalSessions > 0
-                ? ((attendedSessions / totalSessions) * 100).round()
-                : 0;
+      print('❌ Error in _loadAllStudentsInGroups: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
       }
-    } catch (e) {
-      print('⚠️ Error calculating attendance stats: $e');
+
+      // Return empty groups on error
+      return {
+        'Excellent (90-100%)': [],
+        'Good (75-89%)': [],
+        'Average (60-74%)': [],
+        'Below Average (40-59%)': [],
+        'Poor (0-39%)': [],
+      };
     }
   }
 
@@ -3000,13 +3866,27 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
           WidgetsBinding.instance.addPostFrameCallback((_) {
             setState(() {
               _cachedStudentsData =
-                  snapshot.data ?? {'Enrolled': [], 'Absentees': []};
+                  snapshot.data ??
+                  {
+                    'Excellent (90-100%)': [],
+                    'Good (75-89%)': [],
+                    'Average (60-74%)': [],
+                    'Below Average (40-59%)': [],
+                    'Poor (0-39%)': [],
+                  };
               _studentsDataLoaded = true;
             });
           });
 
           return _buildStudentsContent(
-            snapshot.data ?? {'Enrolled': [], 'Absentees': []},
+            snapshot.data ??
+                {
+                  'Excellent (90-100%)': [],
+                  'Good (75-89%)': [],
+                  'Average (60-74%)': [],
+                  'Below Average (40-59%)': [],
+                  'Poor (0-39%)': [],
+                },
           );
         },
       );
@@ -3018,8 +3898,43 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
   Widget _buildStudentsContent(
     Map<String, List<Map<String, dynamic>>> groupedStudents,
   ) {
+    // Get non-empty groups for tabs
+    final nonEmptyGroups =
+        groupedStudents.entries
+            .where((entry) => entry.value.isNotEmpty)
+            .toList();
+
+    if (nonEmptyGroups.isEmpty) {
+      return Center(
+        child: Container(
+          padding: EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.people_outline, size: 64, color: Colors.grey[400]),
+              SizedBox(height: 16),
+              Text(
+                'No Students Found',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[600],
+                ),
+              ),
+              SizedBox(height: 8),
+              Text(
+                'No students have attendance records yet.',
+                style: TextStyle(color: Colors.grey[500]),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return DefaultTabController(
-      length: 2,
+      length: nonEmptyGroups.length,
       child: Column(
         children: [
           Container(
@@ -3038,6 +3953,7 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
               ],
             ),
             child: TabBar(
+              isScrollable: true,
               indicator: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [Color(0xFF1B5E20), Color(0xFF2E7D32)],
@@ -3046,36 +3962,46 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
               ),
               labelColor: Colors.white,
               unselectedLabelColor: Color(0xFF1B5E20),
-              labelStyle: TextStyle(fontWeight: FontWeight.bold),
-              unselectedLabelStyle: TextStyle(fontWeight: FontWeight.w600),
-              tabs: [
-                Container(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.verified_user, size: 20),
-                      SizedBox(width: 8),
-                      Text(
-                        'Enrolled (${_filterStudents(groupedStudents['Enrolled']!).length})',
+              labelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+              unselectedLabelStyle: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+              ),
+              tabs:
+                  nonEmptyGroups.map((entry) {
+                    IconData icon;
+
+                    if (entry.key.contains('90-100')) {
+                      icon = Icons.star;
+                    } else if (entry.key.contains('75-89')) {
+                      icon = Icons.thumb_up;
+                    } else if (entry.key.contains('60-74')) {
+                      icon = Icons.trending_up;
+                    } else if (entry.key.contains('40-59')) {
+                      icon = Icons.trending_down;
+                    } else {
+                      icon = Icons.warning;
+                    }
+
+                    return Container(
+                      padding: EdgeInsets.symmetric(
+                        vertical: 12,
+                        horizontal: 8,
                       ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.person_off, size: 20),
-                      SizedBox(width: 8),
-                      Text(
-                        'Absentees (${_filterStudents(groupedStudents['Absentees']!).length})',
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(icon, size: 16),
+                          SizedBox(height: 4),
+                          Text(
+                            '${entry.key.split(' ')[0]}\n(${_filterStudents(entry.value).length})',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 11),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                ),
-              ],
+                    );
+                  }).toList(),
             ),
           ),
           // Search Bar
@@ -3125,16 +4051,13 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
           ),
           Expanded(
             child: TabBarView(
-              children: [
-                _buildEnhancedStudentsList(
-                  _filterStudents(groupedStudents['Enrolled']!),
-                  true,
-                ),
-                _buildEnhancedStudentsList(
-                  _filterStudents(groupedStudents['Absentees']!),
-                  false,
-                ),
-              ],
+              children:
+                  nonEmptyGroups.map((entry) {
+                    return _buildEnhancedStudentsList(
+                      _filterStudents(entry.value),
+                      true, // All students are enrolled
+                    );
+                  }).toList(),
             ),
           ),
         ],
@@ -3570,5 +4493,154 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
           email.contains(_searchQuery) ||
           department.contains(_searchQuery);
     }).toList();
+  }
+
+  Widget _buildStatItem(
+    String label,
+    String value,
+    Color color,
+    IconData icon,
+  ) {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, color: color, size: 20),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        Text(
+          label,
+          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+        ),
+      ],
+    );
+  }
+}
+
+// Test data creator for debugging
+class TestDataCreator {
+  static Future<void> createTestAttendanceData() async {
+    print('🧪 Creating test attendance data...');
+
+    final db = FirebaseFirestore.instance;
+    final now = DateTime.now();
+
+    // Test students from the group
+    final testStudents = [
+      {
+        'rollNumber': '23CSR071',
+        'name': 'Test Student 1',
+        'email': 'student1@test.com',
+      },
+      {
+        'rollNumber': '23CSR112',
+        'name': 'Test Student 2',
+        'email': 'student2@test.com',
+      },
+      {
+        'rollNumber': '23EEE029',
+        'name': 'Test Student 3',
+        'email': 'student3@test.com',
+      },
+    ];
+
+    try {
+      for (final student in testStudents) {
+        // Create multiple sessions for each student (simulating attendance over different days)
+        for (int dayOffset = 0; dayOffset < 3; dayOffset++) {
+          final sessionDate = now.subtract(Duration(days: dayOffset));
+          final sessionId =
+              'test_session_${sessionDate.millisecondsSinceEpoch}_${student['rollNumber']}';
+
+          // Simulate some students missing some sessions
+          bool shouldCreateSession = true;
+          if (dayOffset == 1 && student['rollNumber'] == '23CSR071') {
+            shouldCreateSession = false; // 23CSR071 missed day 1
+          }
+          if (dayOffset == 2 && student['rollNumber'] == '23EEE029') {
+            shouldCreateSession = false; // 23EEE029 missed day 2
+          }
+
+          if (shouldCreateSession) {
+            // Create attendance data following the markattendance.dart structure
+            await db
+                .collection('student_checkins')
+                .doc(student['rollNumber'])
+                .collection('sessions')
+                .doc(sessionId)
+                .set({
+                  'student': {
+                    'rollNumber': student['rollNumber'],
+                    'name': student['name'],
+                    'email': student['email'],
+                    'department': 'CSE',
+                    'groupId': 'kcVkbB1SIcZf6UrYny8N',
+                    'groupName': 'III-CSE-B',
+                  },
+                  'campus': 'Main Campus',
+                  'day': _getDayOfWeek(sessionDate.weekday),
+                  'date': sessionDate.toIso8601String().split('T')[0],
+                  'period': 3,
+                  'subject': 'IOT LAB B1/ CN LAB B2',
+                  'roomOrLocation': 'Lab 201',
+                  'checkInAt': Timestamp.fromDate(
+                    sessionDate.subtract(Duration(minutes: 30)),
+                  ),
+                  'expectedEndAt': Timestamp.fromDate(
+                    sessionDate.add(Duration(hours: 1)),
+                  ),
+                  'checkInLat': 12.9716,
+                  'checkInLng': 77.5946,
+                  'status':
+                      'completed', // Mark as completed for historical sessions
+                  'logs': [
+                    'Test attendance data created for debugging - Day $dayOffset',
+                  ],
+                  'createdAt': Timestamp.fromDate(sessionDate),
+                });
+
+            print(
+              '✅ Created test attendance for ${student['rollNumber']} on ${sessionDate.toIso8601String().split('T')[0]}',
+            );
+          } else {
+            print(
+              '❌ Skipped session for ${student['rollNumber']} on ${sessionDate.toIso8601String().split('T')[0]} (simulating absence)',
+            );
+          }
+        }
+      }
+
+      print(
+        '🎉 Test attendance data created successfully with multiple sessions!',
+      );
+      print('📱 Refresh the attendance view to see the test data');
+    } catch (e) {
+      print('❌ Error creating test data: $e');
+    }
+  }
+
+  static String _getDayOfWeek(int weekday) {
+    const days = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ];
+    return days[weekday - 1];
   }
 }
