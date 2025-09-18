@@ -21,6 +21,7 @@ class TeacherDashboard extends StatefulWidget {
     required this.designation,
     this.groups,
   });
+  
 
   @override
   State<TeacherDashboard> createState() => _TeacherDashboardState();
@@ -110,8 +111,8 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
 
   Future<void> _loadTodaysAttendance() async {
     final today = DateTime.now();
-    final todayStr =
-        '${today.day.toString().padLeft(2, '0')}-${today.month.toString().padLeft(2, '0')}-${today.year}';
+    final startOfDay = DateTime(today.year, today.month, today.day);
+    final endOfDay = startOfDay.add(Duration(days: 1));
 
     Map<String, int> attendanceCount = {};
 
@@ -122,24 +123,41 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
         for (var group in _subjectGroups[subject]!) {
           final groupId = group['groupId'];
 
-          // Query student check-ins for this group and subject today
-          final checkinsQuery =
-              await FirebaseFirestore.instance
-                  .collection('student_checkins')
-                  .get();
-
-          for (var studentDoc in checkinsQuery.docs) {
-            final sessionsQuery =
-                await studentDoc.reference
-                    .collection('sessions')
-                    .where('date', isEqualTo: todayStr)
-                    .where('subject', isEqualTo: subject)
-                    .where('groupId', isEqualTo: groupId)
-                    .where('status', isEqualTo: 'completed')
+          try {
+            // Query student check-ins with proper date filtering
+            final checkinsQuery =
+                await FirebaseFirestore.instance
+                    .collection('student_checkins')
                     .get();
 
-            attendanceCount[subject] =
-                (attendanceCount[subject] ?? 0) + sessionsQuery.docs.length;
+            for (var studentDoc in checkinsQuery.docs) {
+              final sessionsQuery =
+                  await studentDoc.reference
+                      .collection('sessions')
+                      .where(
+                        'date',
+                        isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay),
+                      )
+                      .where('date', isLessThan: Timestamp.fromDate(endOfDay))
+                      .where('subject', isEqualTo: subject)
+                      .where('status', whereIn: ['completed', 'ongoing'])
+                      .get();
+
+              // Filter by group
+              for (var sessionDoc in sessionsQuery.docs) {
+                final sessionData = sessionDoc.data();
+                final studentData =
+                    sessionData['student'] as Map<String, dynamic>? ?? {};
+                final sessionGroupId = studentData['groupId']?.toString() ?? '';
+
+                if (sessionGroupId == groupId) {
+                  attendanceCount[subject] =
+                      (attendanceCount[subject] ?? 0) + 1;
+                }
+              }
+            }
+          } catch (e) {
+            print('Error loading today\'s attendance for $subject: $e');
           }
         }
       }
@@ -1338,227 +1356,77 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
       print('📅 Selected date: $_selectedDate');
       print('📅 Selected date range: $_selectedDateRange');
 
-      // Try to get all student check-ins from student_checkins collection
-      QuerySnapshot? checkinsQuery;
+      // Create date filter - use Timestamp for Firestore comparison
+      DateTime targetDate = _selectedDateRange?.start ?? _selectedDate;
+      DateTime startOfDay = DateTime(
+        targetDate.year,
+        targetDate.month,
+        targetDate.day,
+      );
+      DateTime endOfDay = startOfDay.add(Duration(days: 1));
 
-      try {
-        // First, let's get all documents in student_checkins collection
-        print('🔍 Attempting to access student_checkins collection...');
-        checkinsQuery =
-            await FirebaseFirestore.instance
-                .collection('student_checkins')
-                .get();
-        print(
-          '👥 Collection query returned ${checkinsQuery.docs.length} documents',
+      if (_selectedDateRange != null) {
+        endOfDay = DateTime(
+          _selectedDateRange!.end.year,
+          _selectedDateRange!.end.month,
+          _selectedDateRange!.end.day + 1,
         );
-
-        // List all document IDs if any exist
-        if (checkinsQuery.docs.isNotEmpty) {
-          final docIds = checkinsQuery.docs.map((doc) => doc.id).toList();
-          print('📋 Document IDs in student_checkins: $docIds');
-
-          // Test access to first document
-          final firstDoc = checkinsQuery.docs.first;
-          print('🔍 Testing access to first document: ${firstDoc.id}');
-          final sessionsSnap =
-              await firstDoc.reference.collection('sessions').get();
-          print('   Sessions in ${firstDoc.id}: ${sessionsSnap.docs.length}');
-
-          if (sessionsSnap.docs.isNotEmpty) {
-            final sampleSession = sessionsSnap.docs.first.data();
-            print('   Sample session subject: ${sampleSession['subject']}');
-            print('   Sample session student: ${sampleSession['student']}');
-          }
-        } else {
-          print('⚠️ No documents found in student_checkins collection');
-
-          // Let's try to check if any new documents were created recently
-          // by looking for specific roll numbers we know exist
-          final knownRollNumbers = ['23CSR071', '23CSR112', '23EEE029'];
-          for (String rollNumber in knownRollNumbers) {
-            try {
-              final testDoc =
-                  await FirebaseFirestore.instance
-                      .collection('student_checkins')
-                      .doc(rollNumber)
-                      .get();
-              if (testDoc.exists) {
-                print('✅ Found document for $rollNumber');
-                final sessions =
-                    await testDoc.reference.collection('sessions').get();
-                print('   Sessions: ${sessions.docs.length}');
-                checkinsQuery =
-                    await FirebaseFirestore.instance
-                        .collection('student_checkins')
-                        .get(); // Refresh the query
-                break;
-              } else {
-                print('❌ Document $rollNumber does not exist');
-              }
-            } catch (e) {
-              print('❌ Error accessing $rollNumber: $e');
-            }
-          }
-        }
-      } catch (e) {
-        print('❌ Error accessing student_checkins collection: $e');
-        print('❌ Error type: ${e.runtimeType}');
-        print('❌ Error details: $e');
-
-        // Try alternative collection names
-        final alternativeNames = [
-          'student_check_ins',
-          'students_checkins',
-          'checkins',
-          'student_sessions',
-        ];
-        for (String altName in alternativeNames) {
-          try {
-            print('🔍 Trying alternative collection name: $altName');
-            checkinsQuery =
-                await FirebaseFirestore.instance.collection(altName).get();
-            print(
-              '✅ Found collection $altName with ${checkinsQuery.docs.length} documents',
-            );
-            break;
-          } catch (altError) {
-            print('❌ Collection $altName not found: $altError');
-          }
-        }
       }
 
-      if (checkinsQuery == null || checkinsQuery.docs.isEmpty) {
-        print(
-          '⚠️ No student check-in documents found, trying refresh approach...',
-        );
+      print('🔍 Querying from ${startOfDay} to ${endOfDay}');
 
-        // Wait a moment and try again (in case of Firebase caching issues)
-        await Future.delayed(Duration(milliseconds: 500));
+      // Query student_checkins collection
+      final checkinsQuery =
+          await FirebaseFirestore.instance.collection('student_checkins').get();
 
-        try {
-          checkinsQuery = await FirebaseFirestore.instance
-              .collection('student_checkins')
-              .get(GetOptions(source: Source.server)); // Force server fetch
-          print(
-            '🔄 Retry query returned ${checkinsQuery.docs.length} documents',
-          );
-        } catch (e) {
-          print('❌ Retry failed: $e');
-        }
+      print('👥 Found ${checkinsQuery.docs.length} student documents');
 
-        if (checkinsQuery == null || checkinsQuery.docs.isEmpty) {
-          // Let's explore what collections are available
-          print('🔍 Exploring available Firestore collections...');
-          try {
-            // Try to list some known collections to see what's available
-            final knownCollections = [
-              'users',
-              'students',
-              'groups',
-              'timetables',
-              'attendance',
-            ];
-            for (String collection in knownCollections) {
-              try {
-                final testQuery =
-                    await FirebaseFirestore.instance
-                        .collection(collection)
-                        .limit(1)
-                        .get();
-                print(
-                  '✅ Collection "$collection" exists with ${testQuery.docs.length} documents (showing 1)',
-                );
-                if (testQuery.docs.isNotEmpty) {
-                  print(
-                    '   Sample document keys: ${testQuery.docs.first.data().keys.toList()}',
-                  );
-                }
-              } catch (e) {
-                print('❌ Collection "$collection" error: $e');
-              }
-            }
-
-            // Try to load students from the students collection as fallback
-            print(
-              '🔍 Attempting to use groups/{groupId}/students subcollection as fallback...',
-            );
-
-            // Get all groups to find students
-            for (var group in widget.groups) {
-              final groupId = group['groupId'];
-              final groupName = group['groupName'] ?? 'Unknown Group';
-
-              try {
-                final studentsSnap =
-                    await FirebaseFirestore.instance
-                        .collection('groups')
-                        .doc(groupId)
-                        .collection('students')
-                        .get();
-                print(
-                  '👥 Group $groupName has ${studentsSnap.docs.length} students in subcollection',
-                );
-
-                // Create dummy attendance records from students if needed
-                for (var studentDoc in studentsSnap.docs) {
-                  final studentData = studentDoc.data();
-                  final rollNumber = studentData['rollNumber']?.toString();
-
-                  if (rollNumber != null) {
-                    print('📝 Student: $rollNumber in group $groupName');
-                  }
-                }
-              } catch (e) {
-                print('❌ Error accessing groups/$groupId/students: $e');
-              }
-            }
-          } catch (e) {
-            print('❌ Error exploring collections: $e');
-          }
-
-          setState(() => _attendanceRecords = []);
-          return;
-        }
-      }
-
-      // Process all student documents
+      // Process each student document
       for (var studentDoc in checkinsQuery.docs) {
         final rollNumber = studentDoc.id;
         print('📚 Processing student: $rollNumber');
 
-        // Get all sessions for this student
-        QuerySnapshot sessionsQuery;
-        try {
-          sessionsQuery =
-              await studentDoc.reference.collection('sessions').get();
-          print(
-            '  � Student $rollNumber has ${sessionsQuery.docs.length} sessions',
-          );
-        } catch (e) {
-          print('  ❌ Error loading sessions for $rollNumber: $e');
-          continue;
-        }
+        // Get sessions for this student
+        final sessionsQuery =
+            await studentDoc.reference
+                .collection('sessions')
+                .where('subject', isEqualTo: widget.subject)
+                .where(
+                  'date',
+                  isGreaterThanOrEqualTo: Timestamp.fromDate(startOfDay),
+                )
+                .where('date', isLessThan: Timestamp.fromDate(endOfDay))
+                .get();
+
+        print(
+          '  📖 Found ${sessionsQuery.docs.length} sessions for $rollNumber',
+        );
 
         for (var sessionDoc in sessionsQuery.docs) {
-          final sessionData = sessionDoc.data() as Map<String, dynamic>;
-          final studentData = sessionData['student'] as Map<String, dynamic>?;
-          final sessionSubject = sessionData['subject']?.toString() ?? '';
-          final sessionDate = sessionData['date'] as Timestamp?;
+          final sessionData = sessionDoc.data();
+          final studentData =
+              sessionData['student'] as Map<String, dynamic>? ?? {};
 
-          print(
-            '    � Session ${sessionDoc.id}: subject="$sessionSubject", date=${sessionDate?.toDate()}',
+          // Validate that this session belongs to one of our groups
+          final sessionGroupId = studentData['groupId']?.toString() ?? '';
+          final sessionGroupName = studentData['groupName']?.toString() ?? '';
+
+          bool belongsToGroup = widget.groups.any(
+            (group) =>
+                group['groupId'] == sessionGroupId ||
+                group['groupName'] == sessionGroupName,
           );
 
-          // First, load ALL records regardless of subject or date for debugging
-          if (sessionDate != null && studentData != null) {
+          if (!belongsToGroup) {
+            print('  ⏭️ Skipping session - not in teacher\'s groups');
+            continue;
+          }
+
+          final sessionDate = sessionData['date'] as Timestamp?;
+          if (sessionDate != null) {
             final sessionDateTime = sessionDate.toDate();
 
-            // Get group information from the student data (stored in session)
-            final groupId = studentData['groupId']?.toString() ?? '';
-            final groupName =
-                studentData['groupName']?.toString() ?? 'Unknown Group';
-
-            // Calculate session duration if completed
+            // Calculate duration if available
             double? durationMinutes;
             if (sessionData['durationMinutes'] != null) {
               durationMinutes =
@@ -1572,32 +1440,16 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
                   checkOut.difference(checkIn).inMinutes.toDouble();
             }
 
-            // Extract the day from the session data or calculate from date
-            String dayName = sessionData['day']?.toString() ?? '';
-            if (dayName.isEmpty) {
-              final weekday = sessionDateTime.weekday;
-              const dayNames = [
-                'Monday',
-                'Tuesday',
-                'Wednesday',
-                'Thursday',
-                'Friday',
-                'Saturday',
-                'Sunday',
-              ];
-              dayName = dayNames[(weekday - 1) % 7];
-            }
-
-            // Create the record
+            // Create attendance record
             final record = {
               'sessionId': sessionDoc.id,
               'rollNumber': rollNumber,
               'studentName': studentData['name'] ?? 'Unknown',
               'studentEmail': studentData['email'] ?? '',
               'department': studentData['department'] ?? '',
-              'groupId': groupId,
-              'groupName': groupName,
-              'subject': sessionSubject,
+              'groupId': sessionGroupId,
+              'groupName': sessionGroupName,
+              'subject': sessionData['subject'] ?? '',
               'period': sessionData['period'],
               'roomOrLocation': sessionData['roomOrLocation'] ?? '',
               'campus': sessionData['campus'] ?? '',
@@ -1613,91 +1465,30 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
               'closeReason': sessionData['closeReason'],
               'logs': sessionData['logs'] ?? [],
               'date': sessionDate,
-              'isEnrolled': true, // We'll determine this later
-              'day': dayName,
+              'isEnrolled': true,
+              'day': sessionData['day'] ?? '',
+              'datetime': sessionDateTime,
             };
 
             records.add(record);
             print(
-              '    ✅ Added record for $rollNumber (${studentData['name']}) - Subject: $sessionSubject',
+              '✅ Added attendance record for $rollNumber - ${studentData['name']}',
             );
           }
         }
       }
 
-      print('� Total records loaded before filtering: ${records.length}');
+      print('📊 Total records found: ${records.length}');
 
-      // Now apply filtering
-      List<Map<String, dynamic>> filteredRecords = [];
+      // Apply UI filters
+      records = _applyFilters(records);
 
-      for (var record in records) {
-        bool matchesSubject = false;
-        bool matchesDate = false;
+      setState(() => _attendanceRecords = records);
 
-        // Subject filter
-        final recordSubject = record['subject']?.toString() ?? '';
-        matchesSubject = recordSubject == widget.subject;
-
-        // Date filter
-        final recordDate = record['date'] as Timestamp?;
-        if (recordDate != null) {
-          final sessionDateTime = recordDate.toDate();
-
-          if (_selectedDateRange != null) {
-            matchesDate =
-                sessionDateTime.isAfter(
-                  _selectedDateRange!.start.subtract(Duration(days: 1)),
-                ) &&
-                sessionDateTime.isBefore(
-                  _selectedDateRange!.end.add(Duration(days: 1)),
-                );
-          } else {
-            // Show all records by default unless user specifically selected a date
-            matchesDate = true;
-          }
-        }
-
-        if (matchesSubject && matchesDate) {
-          // Check enrollment status
-          final rollNumber = record['rollNumber']?.toString() ?? '';
-          final groupName = record['groupName']?.toString() ?? '';
-
-          bool isEnrolled = false;
-          if (_groupStudents.containsKey(groupName)) {
-            isEnrolled = _groupStudents[groupName]!.contains(rollNumber);
-          }
-
-          if (!isEnrolled) {
-            for (var groupStudentsList in _groupStudents.values) {
-              if (groupStudentsList.contains(rollNumber)) {
-                isEnrolled = true;
-                break;
-              }
-            }
-          }
-
-          record['isEnrolled'] = isEnrolled;
-          filteredRecords.add(record);
-          print(
-            '    🎯 Record matches filters: $rollNumber - ${record['studentName']}',
-          );
-        }
-      }
-
-      print(
-        '🎯 Records matching subject filter ($widget.subject): ${records.where((r) => r['subject'] == widget.subject).length}',
-      );
-      print('🎯 Records matching date filter: ${filteredRecords.length}');
-
-      // Apply additional UI filters
-      filteredRecords = _applyFilters(filteredRecords);
-
-      print(
-        '🎯 Final attendance records count after all filters: ${filteredRecords.length}',
-      );
-      setState(() => _attendanceRecords = filteredRecords);
-    } catch (e) {
+      print('📊 Final filtered records: ${records.length}');
+    } catch (e, stackTrace) {
       print('❌ Error loading attendance: $e');
+      print('Stack trace: $stackTrace');
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -2541,7 +2332,7 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
                       Icon(Icons.percent, size: 14, color: Colors.grey[500]),
                       SizedBox(width: 2),
                       Text(
-                        '${attendancePercentage.toInt()}%',
+                        '${attendancePercentage.toInt()}',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey[600],
@@ -3593,58 +3384,20 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
         'Poor (0-39%)': [],
       };
 
-      // Get groups passed from the parent widget
-      List<Map<String, dynamic>> teacherGroups = widget.groups;
+      print('🔍 Loading students for ${widget.groups.length} groups...');
 
-      print('🔍 Loading students for ${teacherGroups.length} groups...');
-
-      for (var group in teacherGroups) {
+      for (var group in widget.groups) {
         final groupName = group['groupName'] ?? 'Unknown Group';
         final groupId = group['groupId'];
 
-        print('📚 Processing group: $groupName');
-        print('🔑 Group ID: "$groupId"');
+        print('📚 Processing group: $groupName (ID: $groupId)');
 
-        // Verify the group ID is correct by checking available groups
         try {
-          final allGroupsQuery =
-              await FirebaseFirestore.instance.collection('groups').get();
-
-          String? correctGroupId;
-          for (var doc in allGroupsQuery.docs) {
-            final data = doc.data();
-            final name = data['name'] ?? 'Unknown';
-
-            // Check if this matches our group name exactly
-            if (name == groupName) {
-              correctGroupId = doc.id;
-              print(
-                '🔄 Found correct group ID: $correctGroupId for group $groupName',
-              );
-              break;
-            }
-          }
-
-          // Use the correct group ID if found
-          if (correctGroupId != null && correctGroupId != groupId) {
-            print('🔄 Updating group ID from $groupId to $correctGroupId');
-            group['groupId'] = correctGroupId;
-          }
-        } catch (e) {
-          print('❌ Error verifying group ID: $e');
-        }
-
-        final finalGroupId = group['groupId'];
-
-        // STEP 1: Load ALL students from groups/{groupId}/students subcollection
-        try {
-          print(
-            '📚 Loading ALL students from groups/$finalGroupId/students subcollection...',
-          );
+          // Load students from groups/{groupId}/students subcollection
           final studentsQuery =
               await FirebaseFirestore.instance
                   .collection('groups')
-                  .doc(finalGroupId)
+                  .doc(groupId)
                   .collection('students')
                   .get();
 
@@ -3652,7 +3405,7 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
             '👥 Found ${studentsQuery.docs.length} total students in group $groupName',
           );
 
-          // STEP 2: For each student, check their attendance in student_checkins
+          // Process each student
           for (var studentDoc in studentsQuery.docs) {
             final studentData = studentDoc.data();
             final rollNumber = studentData['rollNumber'] ?? 'Unknown';
@@ -3663,14 +3416,12 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
 
             print('🔍 Checking attendance for student: $rollNumber');
 
-            // STEP 3: Check attendance records for this student
-            bool hasAttendanceToday = false;
-            Map<String, dynamic>? latestSession;
+            // Check attendance records for this student in this subject
             int totalSessions = 0;
             int attendedSessions = 0;
 
             try {
-              // Get ALL sessions for this student in this subject
+              // Query all sessions for this student in this subject
               final allSessionsQuery =
                   await FirebaseFirestore.instance
                       .collection('student_checkins')
@@ -3680,53 +3431,42 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
                       .get();
 
               totalSessions = allSessionsQuery.docs.length;
+
+              // Count completed/ongoing sessions as attended
               attendedSessions =
-                  allSessionsQuery.docs
-                      .where(
-                        (doc) =>
-                            doc.data()['status'] == 'completed' ||
-                            doc.data()['status'] == 'checked_in',
-                      )
-                      .length;
+                  allSessionsQuery.docs.where((doc) {
+                    final status = doc.data()['status'] ?? '';
+                    return status == 'completed' || status == 'ongoing';
+                  }).length;
 
-              // Check for today's attendance specifically
-              final todaySessionsQuery =
-                  await FirebaseFirestore.instance
-                      .collection('student_checkins')
-                      .doc(rollNumber)
-                      .collection('sessions')
-                      .where('subject', isEqualTo: widget.subject)
-                      .where(
-                        'date',
-                        isEqualTo:
-                            _selectedDate.toIso8601String().split('T')[0],
-                      )
-                      .get();
-
-              if (todaySessionsQuery.docs.isNotEmpty) {
-                hasAttendanceToday = true;
-                latestSession = todaySessionsQuery.docs.first.data();
+              if (totalSessions > 0) {
                 print(
                   '✅ Found attendance record for $rollNumber in subject ${widget.subject} (Total: $totalSessions sessions, Attended: $attendedSessions)',
                 );
               } else {
                 print(
-                  '❌ No attendance record found for $rollNumber in subject ${widget.subject} on ${_selectedDate.toIso8601String().split('T')[0]} (Total: $totalSessions sessions, Attended: $attendedSessions)',
+                  '❌ No attendance record found for $rollNumber in subject ${widget.subject} (Total: $totalSessions sessions, Attended: $attendedSessions)',
                 );
               }
             } catch (e) {
               print('⚠️ Error checking attendance for $rollNumber: $e');
             }
 
-            // STEP 4: Create student record with attendance status
+            // Calculate attendance rate
+            final attendanceRate =
+                totalSessions > 0
+                    ? ((attendedSessions / totalSessions) * 100).round()
+                    : 0;
+
+            // Create student record
             final studentRecord = {
               'id': studentDoc.id,
               'rollNumber': rollNumber,
               'studentName': studentName,
               'studentEmail': studentEmail,
               'department': studentData['department'] ?? '',
-              'groupId': finalGroupId,
-              'groupName': groupName,
+              'groupId': groupId, // Use the consistent groupId
+              'groupName': groupName, // Use the consistent groupName
               'isEnrolled': true,
               'phone': studentData['phone'] ?? '',
               'year': studentData['year'] ?? '',
@@ -3736,49 +3476,42 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
                   studentData['biometricRegistered'] ?? false,
               'totalSessions': totalSessions,
               'attendedSessions': attendedSessions,
-              'attendanceRate':
-                  totalSessions > 0
-                      ? ((attendedSessions / totalSessions) * 100).round()
-                      : 0,
-              'hasAttendanceToday': hasAttendanceToday,
-              'latestSession': latestSession,
+              'attendanceRate': attendanceRate,
             };
 
-            // STEP 5: Add to appropriate list based on attendance rate
-            final attendanceRate =
-                totalSessions > 0
-                    ? ((attendedSessions / totalSessions) * 100).round()
-                    : 0;
-            String groupKey;
-
+            // Categorize student by attendance rate
+            String categoryKey;
             if (attendanceRate >= 90) {
-              groupKey = 'Excellent (90-100%)';
+              categoryKey = 'Excellent (90-100%)';
             } else if (attendanceRate >= 75) {
-              groupKey = 'Good (75-89%)';
+              categoryKey = 'Good (75-89%)';
             } else if (attendanceRate >= 60) {
-              groupKey = 'Average (60-74%)';
+              categoryKey = 'Average (60-74%)';
             } else if (attendanceRate >= 40) {
-              groupKey = 'Below Average (40-59%)';
+              categoryKey = 'Below Average (40-59%)';
             } else {
-              groupKey = 'Poor (0-39%)';
+              categoryKey = 'Poor (0-39%)';
             }
 
-            groupedStudents[groupKey]!.add(studentRecord);
+            groupedStudents[categoryKey]!.add(studentRecord);
             print(
+<<<<<<< HEAD
               '✅ Added $rollNumber to $groupKey ($attendanceRate% attendance)',
+=======
+              '✅ Added $rollNumber to $categoryKey (${attendanceRate}% attendance)',
+>>>>>>> 430cf60125c75a2d8b03f0601f0e53d813f9577e
             );
           }
-
-          print('📊 Final count by attendance rate:');
-          for (var entry in groupedStudents.entries) {
-            if (entry.value.isNotEmpty) {
-              print('   ${entry.key}: ${entry.value.length} students');
-            }
-          }
         } catch (e) {
-          print(
-            '❌ Error loading students from groups/$finalGroupId/students: $e',
-          );
+          print('❌ Error loading students from groups/$groupId/students: $e');
+        }
+      }
+
+      // Print final summary
+      print('📊 Final count by attendance rate:');
+      for (var entry in groupedStudents.entries) {
+        if (entry.value.isNotEmpty) {
+          print('   ${entry.key}: ${entry.value.length} students');
         }
       }
 
@@ -3786,21 +3519,15 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
       _studentsDataLoaded = true;
 
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        setState(() => _isLoading = false);
       }
 
       return groupedStudents;
     } catch (e) {
       print('❌ Error in _loadAllStudentsInGroups: $e');
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        setState(() => _isLoading = false);
       }
-
-      // Return empty groups on error
       return {
         'Excellent (90-100%)': [],
         'Good (75-89%)': [],
