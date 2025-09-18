@@ -1,0 +1,21 @@
+* [33m430cf60[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mBranch_Hari_v0[m[33m, [m[1;31morigin/Branch_Hari_v0[m[33m)[m backend logic for teacher dashboard fixed need some optimization
+* [33m7d9d0c2[m Teacher's Dashboard Implemented fully with Test Data
+* [33m019f29b[m upto fetching student data in teacher dashboard
+* [33mb891a1d[m Sessions fixed for Teachers
+* [33mcb6ba5d[m minor UI fix in Teacher dash board
+* [33m6fa90cb[m Mapped teacher with groups and subjects Implemented UI for Teachers Dashboard
+*   [33mefe87c2[m Merge pull request #4 from Harikiruthik-G-R/main
+[32m|[m[33m\[m  
+[32m|[m *   [33m3b5124b[m Merge pull request #3 from Harikiruthik-G-R/branch2_kiruthick
+[32m|[m [34m|[m[35m\[m  
+[32m|[m [34m|[m * [33m6a212f3[m dual fencing algorithm is implemented
+[32m|[m * [35m|[m [33md65e53a[m Branch origin/main up to date
+[32m|[m * [35m|[m [33m9984c7b[m Updated UI for User from Branch2_Kiruthick and Teacher functionality from Branch_Hari_v0
+[32m|[m [36m|[m[35m\[m[35m|[m 
+[32m|[m [36m|[m * [33me2e599f[m Spoofing Problem Resolved
+[32m|[m [36m|[m * [33m15981a0[m few ui has changed
+[32m|[m * [1;31m|[m   [33me232b5d[m Merge pull request #1 from Harikiruthik-G-R/Branch_Hari_v0
+[32m|[m [1;32m|[m[1;33m\[m [1;31m\[m  
+* [1;32m|[m [1;33m|[m [1;31m|[m [33mfb437a2[m Faculty dashboard instructions
+[1;33m|[m [1;32m|[m[1;33m/[m [1;31m/[m  
+[1;33m|[m[1;33m/[m[1;32m|[m [1;31m|[m   

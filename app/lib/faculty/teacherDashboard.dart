@@ -1026,7 +1026,7 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
   DateTime _selectedDate = DateTime.now();
   DateTimeRange? _selectedDateRange;
   List<Map<String, dynamic>> _attendanceRecords = [];
-  Map<String, List<String>> _groupStudents = {};
+  final Map<String, List<String>> _groupStudents = {};
   Map<String, int> _attendanceStats = {};
   String _selectedGroupFilter = 'All Groups';
   String _selectedStatusFilter = 'All Status';
@@ -3302,7 +3302,7 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
                   ],
                 ),
               );
-            }).toList(),
+            }),
           ],
         ),
       ),
@@ -3575,7 +3575,7 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
                     ],
                   ),
                 );
-              }).toList(),
+              }),
           ],
         ),
       ),
@@ -3765,7 +3765,7 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
 
             groupedStudents[groupKey]!.add(studentRecord);
             print(
-              '✅ Added $rollNumber to $groupKey (${attendanceRate}% attendance)',
+              '✅ Added $rollNumber to $groupKey ($attendanceRate% attendance)',
             );
           }
 
