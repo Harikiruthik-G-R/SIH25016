@@ -270,6 +270,27 @@ class _TeachersScreenState extends State<TeachersScreen> {
                                 ),
                               ),
                               const PopupMenuItem(
+                                value: 'groups',
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.groups_rounded,
+                                      size: 18,
+                                      color: Color(0xFF9C27B0),
+                                    ),
+                                    SizedBox(width: 12),
+                                    Text(
+                                      'Manage Groups',
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const PopupMenuItem(
                                 value: 'edit',
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
@@ -406,6 +427,83 @@ class _TeachersScreenState extends State<TeachersScreen> {
                             ),
                           ),
                       ],
+                      // Display assigned groups
+                      Builder(
+                        builder: (context) {
+                          final assignedGroups =
+                              teacher['assignedGroups'] as List<dynamic>? ?? [];
+                          if (assignedGroups.isEmpty) return const SizedBox();
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 12),
+                              _buildInfoRow(
+                                Icons.groups_rounded,
+                                'Groups: ${assignedGroups.length}',
+                                color: const Color(0xFF9C27B0),
+                              ),
+                              const SizedBox(height: 12),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children:
+                                    assignedGroups.take(2).map((group) {
+                                      final groupName =
+                                          group is Map
+                                              ? group['name'] ?? 'Unnamed Group'
+                                              : group.toString();
+                                      return Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 8,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF9C27B0),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: const Color(
+                                                0xFF9C27B0,
+                                              ).withOpacity(0.3),
+                                              offset: const Offset(0, 2),
+                                              blurRadius: 4,
+                                            ),
+                                          ],
+                                        ),
+                                        child: Text(
+                                          groupName,
+                                          textAlign: TextAlign.center,
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.white,
+                                            letterSpacing: 0.2,
+                                            height: 1.2,
+                                          ),
+                                        ),
+                                      );
+                                    }).toList(),
+                              ),
+                              if (assignedGroups.length > 2)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Text(
+                                    '+${assignedGroups.length - 2} more groups',
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      color: Color(0xFF666666),
+                                      fontWeight: FontWeight.w500,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          );
+                        },
+                      ),
                     ],
                   ),
                 ),
@@ -675,6 +773,9 @@ class _TeachersScreenState extends State<TeachersScreen> {
       case 'subjects':
         _showManageSubjectsDialog(teacher);
         break;
+      case 'groups':
+        _showManageGroupsDialog(teacher);
+        break;
       case 'edit':
         _showAddTeacherDialog(teacher: teacher);
         break;
@@ -729,6 +830,17 @@ class _TeachersScreenState extends State<TeachersScreen> {
           (context) => ManageSubjectsDialog(
             teacher: teacher,
             onSubjectsUpdated: _loadTeachers,
+          ),
+    );
+  }
+
+  void _showManageGroupsDialog(Map<String, dynamic> teacher) {
+    showDialog(
+      context: context,
+      builder:
+          (context) => ManageGroupsDialog(
+            teacher: teacher,
+            onGroupsUpdated: _loadTeachers,
           ),
     );
   }
@@ -1009,8 +1121,9 @@ class _AddTeacherDialogState extends State<AddTeacherDialog> {
                   icon: Icons.badge_rounded,
                   isRequired: true,
                   validator: (value) {
-                    if (value?.isEmpty ?? true)
+                    if (value?.isEmpty ?? true) {
                       return 'Please enter designation';
+                    }
                     return null;
                   },
                 ),
@@ -1023,8 +1136,9 @@ class _AddTeacherDialogState extends State<AddTeacherDialog> {
                   icon: Icons.business_rounded,
                   isRequired: true,
                   validator: (value) {
-                    if (value?.isEmpty ?? true)
+                    if (value?.isEmpty ?? true) {
                       return 'Please enter department';
+                    }
                     return null;
                   },
                 ),
@@ -1441,6 +1555,7 @@ class _AddTeacherDialogState extends State<AddTeacherDialog> {
   }
 
   // Enhanced build method for the dialog
+  @override
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
     final isWideScreen = screenSize.width > 600;
@@ -1515,6 +1630,7 @@ class _AddTeacherDialogState extends State<AddTeacherDialog> {
         'joiningDate': _joiningDateController.text.trim(),
         'experience': _experienceController.text.trim(),
         'subjects': widget.teacher?['subjects'] ?? [],
+        'assignedGroups': widget.teacher?['assignedGroups'] ?? [],
         'updatedAt': FieldValue.serverTimestamp(),
       };
 
@@ -1730,7 +1846,7 @@ class _BulkUploadDialogState extends State<BulkUploadDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Preview (${_parsedData!.length > 0 ? _parsedData!.length - 1 : 0} teachers)',
+              'Preview (${_parsedData!.isNotEmpty ? _parsedData!.length - 1 : 0} teachers)',
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
@@ -2187,6 +2303,79 @@ class TeacherDetailsDialog extends StatelessWidget {
                     }).toList(),
               ),
             ],
+            // Display assigned groups
+            Builder(
+              builder: (context) {
+                final assignedGroups =
+                    teacher['assignedGroups'] as List<dynamic>? ?? [];
+                if (assignedGroups.isEmpty) return const SizedBox();
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Assigned Groups:',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children:
+                          assignedGroups.map((group) {
+                            final groupName =
+                                group is Map
+                                    ? group['name'] ?? 'Unnamed Group'
+                                    : group.toString();
+                            final department =
+                                group is Map ? group['department'] ?? '' : '';
+
+                            return Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF9C27B0).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: const Color(
+                                    0xFF9C27B0,
+                                  ).withOpacity(0.3),
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    groupName,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF6A1B9A),
+                                    ),
+                                  ),
+                                  if (department.isNotEmpty)
+                                    Text(
+                                      department,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey[600],
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                    ),
+                  ],
+                );
+              },
+            ),
           ],
         ),
       ),
@@ -2290,7 +2479,9 @@ class _ManageSubjectsDialogState extends State<ManageSubjectsDialog> {
   final _subjectController = TextEditingController();
   final _subjectCodeController = TextEditingController();
   List<Map<String, String>> _subjects = [];
+  List<Map<String, String>> _availableSubjects = [];
   bool _isLoading = false;
+  bool _isLoadingAvailableSubjects = false;
 
   @override
   void initState() {
@@ -2309,6 +2500,91 @@ class _ManageSubjectsDialogState extends State<ManageSubjectsDialog> {
           }
           return {'name': '', 'code': ''};
         }).toList();
+
+    // Load available subjects from assigned groups' timetables
+    _loadAvailableSubjectsFromTimetables();
+  }
+
+  Future<void> _loadAvailableSubjectsFromTimetables() async {
+    setState(() => _isLoadingAvailableSubjects = true);
+
+    try {
+      final assignedGroups =
+          widget.teacher['assignedGroups'] as List<dynamic>? ?? [];
+
+      if (assignedGroups.isEmpty) {
+        setState(() => _availableSubjects = []);
+        return;
+      }
+
+      // Get group IDs
+      final groupIds =
+          assignedGroups
+              .map((group) {
+                if (group is Map) return group['id']?.toString() ?? '';
+                return group.toString();
+              })
+              .where((id) => id.isNotEmpty)
+              .toList();
+
+      if (groupIds.isEmpty) {
+        setState(() => _availableSubjects = []);
+        return;
+      }
+
+      // Query timetables for these groups
+      final timetablesSnapshot =
+          await FirebaseFirestore.instance
+              .collection('timetables')
+              .where('groupId', whereIn: groupIds)
+              .get();
+
+      final subjectSet = <String>{};
+
+      // Extract subjects from timetables
+      for (final timetableDoc in timetablesSnapshot.docs) {
+        final timetableData = timetableDoc.data();
+        final schedule =
+            timetableData['schedule'] as Map<String, dynamic>? ?? {};
+
+        // Iterate through days and periods to collect subjects
+        for (final daySchedule in schedule.values) {
+          if (daySchedule is Map<String, dynamic>) {
+            for (final periodData in daySchedule.values) {
+              if (periodData is Map<String, dynamic>) {
+                final subject = periodData['subject']?.toString().trim();
+                if (subject != null &&
+                    subject.isNotEmpty &&
+                    subject != 'Break' &&
+                    subject != 'Lunch') {
+                  subjectSet.add(subject);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Convert to list of maps for consistency
+      final availableSubjects =
+          subjectSet
+              .map(
+                (subject) => {
+                  'name': subject,
+                  'code': '', // Will be filled when user selects
+                },
+              )
+              .toList();
+
+      availableSubjects.sort((a, b) => a['name']!.compareTo(b['name']!));
+
+      setState(() => _availableSubjects = availableSubjects);
+    } catch (e) {
+      print('Error loading available subjects: $e');
+      setState(() => _availableSubjects = []);
+    } finally {
+      setState(() => _isLoadingAvailableSubjects = false);
+    }
   }
 
   @override
@@ -2349,6 +2625,140 @@ class _ManageSubjectsDialogState extends State<ManageSubjectsDialog> {
               ],
             ),
             const SizedBox(height: 24),
+            // Available subjects from assigned groups' timetables
+            if (_availableSubjects.isNotEmpty) ...[
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF4CAF50).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: const Color(0xFF4CAF50).withOpacity(0.3),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.schedule,
+                          color: Color(0xFF4CAF50),
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Available Subjects from Assigned Groups\' Timetables',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: Color(0xFF2E7D32),
+                          ),
+                        ),
+                        if (_isLoadingAvailableSubjects)
+                          const Padding(
+                            padding: EdgeInsets.only(left: 8),
+                            child: SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Color(0xFF4CAF50),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children:
+                          _availableSubjects.map((subject) {
+                            final isAlreadyAdded = _subjects.any(
+                              (s) =>
+                                  s['name']?.toLowerCase() ==
+                                  subject['name']?.toLowerCase(),
+                            );
+
+                            return GestureDetector(
+                              onTap:
+                                  isAlreadyAdded
+                                      ? null
+                                      : () {
+                                        setState(() {
+                                          _subjectController.text =
+                                              subject['name'] ?? '';
+                                          _subjectCodeController
+                                              .clear(); // User will need to enter code
+                                        });
+                                      },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color:
+                                      isAlreadyAdded
+                                          ? Colors.grey.withOpacity(0.3)
+                                          : const Color(
+                                            0xFF4CAF50,
+                                          ).withOpacity(0.8),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color:
+                                        isAlreadyAdded
+                                            ? Colors.grey
+                                            : const Color(0xFF4CAF50),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      isAlreadyAdded ? Icons.check : Icons.add,
+                                      size: 16,
+                                      color:
+                                          isAlreadyAdded
+                                              ? Colors.grey[600]
+                                              : Colors.white,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      subject['name'] ?? '',
+                                      style: TextStyle(
+                                        color:
+                                            isAlreadyAdded
+                                                ? Colors.grey[600]
+                                                : Colors.white,
+                                        fontWeight: FontWeight.w500,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                    ),
+                    if (_availableSubjects.isNotEmpty)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 8),
+                        child: Text(
+                          'Tap on a subject to select it, then add a subject code below',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF666666),
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -2772,5 +3182,631 @@ class _ManageSubjectsDialogState extends State<ManageSubjectsDialog> {
     _subjectController.dispose();
     _subjectCodeController.dispose();
     super.dispose();
+  }
+}
+
+// Manage Groups Dialog
+class ManageGroupsDialog extends StatefulWidget {
+  final Map<String, dynamic> teacher;
+  final VoidCallback onGroupsUpdated;
+
+  const ManageGroupsDialog({
+    super.key,
+    required this.teacher,
+    required this.onGroupsUpdated,
+  });
+
+  @override
+  State<ManageGroupsDialog> createState() => _ManageGroupsDialogState();
+}
+
+class _ManageGroupsDialogState extends State<ManageGroupsDialog> {
+  List<Map<String, dynamic>> _allGroups = [];
+  List<String> _assignedGroupIds = [];
+  List<Map<String, dynamic>> _availableGroups = [];
+  bool _isLoading = true;
+  bool _isLoadingAvailableGroups = false;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadGroupsAndAssignments();
+    _loadAvailableGroupsFromTimetables();
+  }
+
+  Future<void> _loadAvailableGroupsFromTimetables() async {
+    setState(() => _isLoadingAvailableGroups = true);
+
+    try {
+      // Get teacher's assigned subjects
+      final assignedSubjects =
+          widget.teacher['subjects'] as List<dynamic>? ?? [];
+      if (assignedSubjects.isEmpty) {
+        setState(() => _availableGroups = []);
+        return;
+      }
+
+      final subjectNames =
+          assignedSubjects
+              .map((subject) {
+                if (subject is String) return subject.toLowerCase();
+                if (subject is Map) {
+                  return (subject['name']?.toString() ?? '').toLowerCase();
+                }
+                return '';
+              })
+              .where((name) => name.isNotEmpty)
+              .toSet();
+
+      // Get all timetables
+      final timetablesSnapshot =
+          await FirebaseFirestore.instance.collection('timetables').get();
+
+      final Map<String, Map<String, dynamic>> groupsWithSubjects = {};
+
+      // Analyze each timetable to find groups with matching subjects
+      for (final timetableDoc in timetablesSnapshot.docs) {
+        final timetableData = timetableDoc.data();
+        final groupId = timetableData['groupId']?.toString();
+        final schedule =
+            timetableData['schedule'] as Map<String, dynamic>? ?? {};
+
+        if (groupId == null) continue;
+
+        // Check if this timetable has any of the teacher's subjects
+        bool hasMatchingSubjects = false;
+        for (final daySchedule in schedule.values) {
+          if (daySchedule is Map<String, dynamic>) {
+            for (final periodData in daySchedule.values) {
+              if (periodData is Map<String, dynamic>) {
+                final subject =
+                    periodData['subject']?.toString().toLowerCase().trim();
+                if (subject != null && subjectNames.contains(subject)) {
+                  hasMatchingSubjects = true;
+                  break;
+                }
+              }
+            }
+            if (hasMatchingSubjects) break;
+          }
+        }
+
+        if (hasMatchingSubjects) {
+          // Get group details
+          try {
+            final groupDoc =
+                await FirebaseFirestore.instance
+                    .collection('groups')
+                    .doc(groupId)
+                    .get();
+
+            if (groupDoc.exists) {
+              final groupData = groupDoc.data()!;
+              groupData['id'] = groupDoc.id;
+              groupsWithSubjects[groupId] = groupData;
+            }
+          } catch (e) {
+            // Continue if group doesn't exist
+          }
+        }
+      }
+
+      setState(() => _availableGroups = groupsWithSubjects.values.toList());
+    } catch (e) {
+      print('Error loading available groups from timetables: $e');
+    } finally {
+      setState(() => _isLoadingAvailableGroups = false);
+    }
+  }
+
+  Future<void> _loadGroupsAndAssignments() async {
+    setState(() => _isLoading = true);
+
+    try {
+      // Get teacher's assigned subjects
+      final assignedSubjects =
+          widget.teacher['subjects'] as List<dynamic>? ?? [];
+      final subjectNames =
+          assignedSubjects
+              .map((subject) {
+                if (subject is String) return subject.toLowerCase();
+                if (subject is Map) {
+                  return (subject['name']?.toString() ?? '').toLowerCase();
+                }
+                return '';
+              })
+              .where((name) => name.isNotEmpty)
+              .toSet();
+
+      // Load all groups from Firestore
+      final groupsSnapshot =
+          await FirebaseFirestore.instance
+              .collection('groups')
+              .orderBy('name')
+              .get();
+
+      List<Map<String, dynamic>> allGroups =
+          groupsSnapshot.docs.map((doc) {
+            final data = doc.data();
+            data['id'] = doc.id;
+            return data;
+          }).toList();
+
+      // If teacher has assigned subjects, filter groups that have those subjects in their timetables
+      if (subjectNames.isNotEmpty) {
+        final filteredGroups = <Map<String, dynamic>>[];
+
+        for (final group in allGroups) {
+          // Check if this group has any timetables with the teacher's subjects
+          final timetablesSnapshot =
+              await FirebaseFirestore.instance
+                  .collection('timetables')
+                  .where('groupId', isEqualTo: group['id'])
+                  .get();
+
+          bool hasMatchingSubjects = false;
+
+          for (final timetableDoc in timetablesSnapshot.docs) {
+            final timetableData = timetableDoc.data();
+            final schedule =
+                timetableData['schedule'] as Map<String, dynamic>? ?? {};
+
+            // Check if any period has a matching subject
+            for (final daySchedule in schedule.values) {
+              if (daySchedule is Map<String, dynamic>) {
+                for (final periodData in daySchedule.values) {
+                  if (periodData is Map<String, dynamic>) {
+                    final subject =
+                        periodData['subject']?.toString().toLowerCase().trim();
+                    if (subject != null && subjectNames.contains(subject)) {
+                      hasMatchingSubjects = true;
+                      break;
+                    }
+                  }
+                }
+                if (hasMatchingSubjects) break;
+              }
+            }
+            if (hasMatchingSubjects) break;
+          }
+
+          if (hasMatchingSubjects) {
+            filteredGroups.add(group);
+          }
+        }
+
+        _allGroups = filteredGroups;
+      } else {
+        // If no subjects assigned, show all groups
+        _allGroups = allGroups;
+      }
+
+      // Get currently assigned groups for this teacher
+      final assignedGroups =
+          widget.teacher['assignedGroups'] as List<dynamic>? ?? [];
+      _assignedGroupIds =
+          assignedGroups
+              .map((group) {
+                if (group is String) return group;
+                if (group is Map) return group['id']?.toString() ?? '';
+                return '';
+              })
+              .where((id) => id.isNotEmpty)
+              .toList();
+    } catch (e) {
+      _showErrorSnackBar('Error loading groups: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        width: screenWidth > 600 ? screenWidth * 0.6 : screenWidth * 0.9,
+        constraints: BoxConstraints(
+          maxHeight: screenHeight * 0.8,
+          minHeight: 400,
+        ),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildHeader(),
+            const SizedBox(height: 24),
+            _isLoading ? _buildLoadingState() : _buildGroupsList(),
+            const SizedBox(height: 16),
+            _buildActionButtons(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF9C27B0).withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Icon(
+            Icons.groups_rounded,
+            color: Color(0xFF9C27B0),
+            size: 24,
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Manage Groups',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              Text(
+                'Assign groups to ${widget.teacher['name'] ?? 'Teacher'}',
+                style: TextStyle(color: Colors.grey[600], fontSize: 14),
+              ),
+            ],
+          ),
+        ),
+        IconButton(
+          onPressed: () => Navigator.pop(context),
+          icon: const Icon(Icons.close),
+          style: IconButton.styleFrom(
+            backgroundColor: Colors.grey[100],
+            foregroundColor: Colors.grey[600],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return const Expanded(
+      child: Center(child: CircularProgressIndicator(color: Color(0xFF9C27B0))),
+    );
+  }
+
+  Widget _buildGroupsList() {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Available Groups from Timetables Section
+          _buildAvailableGroupsSection(),
+
+          const SizedBox(height: 16),
+
+          // Main Groups List
+          if (_allGroups.isEmpty)
+            _buildEmptyGroupsState()
+          else
+            _buildMainGroupsList(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAvailableGroupsSection() {
+    final assignedSubjects = widget.teacher['subjects'] as List<dynamic>? ?? [];
+
+    if (assignedSubjects.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.orange[50],
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.orange[200]!),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.info_outline, color: Colors.orange[700], size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Assign subjects first to see groups with those subjects in their timetables',
+                style: TextStyle(color: Colors.orange[700], fontSize: 14),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.schedule, color: Color(0xFF9C27B0), size: 20),
+            const SizedBox(width: 8),
+            const Text(
+              'Groups from Timetables',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF9C27B0),
+              ),
+            ),
+            if (_isLoadingAvailableGroups) ...[
+              const SizedBox(width: 8),
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Color(0xFF9C27B0),
+                ),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Groups that have your assigned subjects in their timetables',
+          style: TextStyle(color: Colors.grey[600], fontSize: 14),
+        ),
+        const SizedBox(height: 12),
+
+        if (_availableGroups.isEmpty && !_isLoadingAvailableGroups)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey[200]!),
+            ),
+            child: Text(
+              'No groups found with your assigned subjects in their timetables',
+              style: TextStyle(color: Colors.grey[600], fontSize: 14),
+              textAlign: TextAlign.center,
+            ),
+          )
+        else
+          Container(
+            constraints: const BoxConstraints(maxHeight: 120),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children:
+                    _availableGroups.map((group) {
+                      final isAlreadyAssigned = _assignedGroupIds.contains(
+                        group['id'],
+                      );
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: FilterChip(
+                          label: Text(group['name'] ?? 'Unnamed Group'),
+                          selected: isAlreadyAssigned,
+                          onSelected:
+                              isAlreadyAssigned
+                                  ? null
+                                  : (selected) {
+                                    if (selected) {
+                                      setState(() {
+                                        _assignedGroupIds.add(group['id']);
+                                      });
+                                    }
+                                  },
+                          selectedColor: const Color(
+                            0xFF9C27B0,
+                          ).withOpacity(0.2),
+                          checkmarkColor: const Color(0xFF9C27B0),
+                          backgroundColor:
+                              isAlreadyAssigned ? Colors.grey[200] : null,
+                          labelStyle: TextStyle(
+                            color:
+                                isAlreadyAssigned
+                                    ? Colors.grey[600]
+                                    : _assignedGroupIds.contains(group['id'])
+                                    ? const Color(0xFF9C27B0)
+                                    : null,
+                            fontWeight:
+                                isAlreadyAssigned
+                                    ? FontWeight.normal
+                                    : FontWeight.w500,
+                          ),
+                          avatar:
+                              isAlreadyAssigned
+                                  ? const Icon(Icons.check, size: 18)
+                                  : null,
+                        ),
+                      );
+                    }).toList(),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildEmptyGroupsState() {
+    return Expanded(
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.school_outlined, size: 64, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text(
+              'No Groups Available',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Create groups first to assign them to teachers',
+              style: TextStyle(color: Colors.grey[500], fontSize: 14),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMainGroupsList() {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'All Available Groups (${_allGroups.length})',
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: ListView.builder(
+              itemCount: _allGroups.length,
+              itemBuilder: (context, index) {
+                final group = _allGroups[index];
+                final isAssigned = _assignedGroupIds.contains(group['id']);
+
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  elevation: isAssigned ? 3 : 1,
+                  color:
+                      isAssigned
+                          ? const Color(0xFF9C27B0).withOpacity(0.1)
+                          : null,
+                  child: CheckboxListTile(
+                    value: isAssigned,
+                    onChanged: (bool? value) {
+                      setState(() {
+                        if (value == true) {
+                          _assignedGroupIds.add(group['id']);
+                        } else {
+                          _assignedGroupIds.remove(group['id']);
+                        }
+                      });
+                    },
+                    activeColor: const Color(0xFF9C27B0),
+                    title: Text(
+                      group['name'] ?? 'Unnamed Group',
+                      style: TextStyle(
+                        fontWeight:
+                            isAssigned ? FontWeight.w600 : FontWeight.normal,
+                      ),
+                    ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Department: ${group['department'] ?? 'N/A'}'),
+                        Text(
+                          'Students: ${group['maxStudents'] ?? 0} • Subjects: ${(group['subjects'] as List?)?.length ?? 0}',
+                        ),
+                      ],
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButtons() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        const SizedBox(width: 12),
+        ElevatedButton(
+          onPressed: _isSaving ? null : _saveGroupAssignments,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF9C27B0),
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          ),
+          child:
+              _isSaving
+                  ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                  : const Text(
+                    'Save Changes',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _saveGroupAssignments() async {
+    setState(() => _isSaving = true);
+
+    try {
+      // Prepare the assigned groups data with group details
+      final assignedGroups =
+          _assignedGroupIds.map((groupId) {
+            final group = _allGroups.firstWhere((g) => g['id'] == groupId);
+            return {
+              'id': groupId,
+              'name': group['name'],
+              'department': group['department'],
+            };
+          }).toList();
+
+      // Update teacher document with assigned groups
+      await FirebaseFirestore.instance
+          .collection('teachers')
+          .doc(widget.teacher['id'])
+          .update({
+            'assignedGroups': assignedGroups,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+
+      _showSuccessSnackBar('Groups assigned successfully');
+      Navigator.pop(context);
+      widget.onGroupsUpdated();
+    } catch (e) {
+      _showErrorSnackBar('Error assigning groups: $e');
+    } finally {
+      setState(() => _isSaving = false);
+    }
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
+    );
+  }
+
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: const Color(0xFF9C27B0),
+      ),
+    );
   }
 }
