@@ -70,7 +70,7 @@ Widget _buildDashboardContent() {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(vertical: 20),
+            padding: const EdgeInsets.symmetric(vertical: 6),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -141,28 +141,38 @@ Widget _buildDashboardContent() {
   }
 }
   Widget _buildFourColumnLayout({double spacing = 16}) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
       children: [
+        // Top row with count cards and rankings
         Expanded(
-          flex: 1,
-          child: _buildRecentGroupsCard(),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 1,
+                child: _buildRecentGroupsCard(),
+              ),
+              SizedBox(width: spacing),
+              Expanded(
+                flex: 1,
+                child: _buildRecentStaffsCard(),
+              ),
+              SizedBox(width: spacing),
+              Expanded(
+                flex: 1,
+                child: _buildTodayLeaveRankingCard(),
+              ),
+              SizedBox(width: spacing),
+              Expanded(
+                flex: 1,
+                child: _buildSemesterLeaveRankingCard(),
+              ),
+            ],
+          ),
         ),
-        SizedBox(width: spacing),
-        Expanded(
-          flex: 1,
-          child: _buildRecentStaffsCard(),
-        ),
-        SizedBox(width: spacing),
-        Expanded(
-          flex: 1,
-          child: _buildTodayLeaveRankingCard(),
-        ),
-        SizedBox(width: spacing),
-        Expanded(
-          flex: 1,
-          child: _buildSemesterLeaveRankingCard(),
-        ),
+        const SizedBox(height: 16),
+        // Bottom row with horizontal least leave card
+        _buildLeastLeaveCard(),
       ],
     );
   }
@@ -179,6 +189,9 @@ Widget _buildDashboardContent() {
             ],
           ),
         ),
+        const SizedBox(height: 16),
+        // Add the horizontal card here
+        _buildLeastLeaveCard(),
         const SizedBox(height: 16),
         Expanded(
           child: Row(
@@ -206,6 +219,9 @@ Widget _buildDashboardContent() {
           ),
         ),
         const SizedBox(height: 16),
+        // Add the horizontal card here
+        _buildLeastLeaveCard(),
+        const SizedBox(height: 16),
         Expanded(
           child: Row(
             children: [
@@ -223,15 +239,17 @@ Widget _buildDashboardContent() {
     return SingleChildScrollView(
       child: Column(
         children: [
-          SizedBox(
-            height: 300,
-            child: _buildRecentGroupsCard(),
+          // Keep the count cards side by side even on mobile
+          Row(
+            children: [
+              Expanded(child: _buildRecentGroupsCard()),
+              const SizedBox(width: 12),
+              Expanded(child: _buildRecentStaffsCard()),
+            ],
           ),
           const SizedBox(height: 16),
-          SizedBox(
-            height: 300,
-            child: _buildRecentStaffsCard(),
-          ),
+          // Add the new horizontal card here
+          _buildLeastLeaveCard(),
           const SizedBox(height: 16),
           SizedBox(
             height: 350,
@@ -249,226 +267,125 @@ Widget _buildDashboardContent() {
   }
 
   Widget _buildRecentGroupsCard() {
-    // Sample data - replace with actual data from your database
-    List<Map<String, String>> recentGroups = [
-      {'name': 'CSE 3rd Year A', 'date': '2 days ago', 'students': '45'},
-      {'name': 'ECE 2nd Year B', 'date': '3 days ago', 'students': '42'},
-      {'name': 'MECH 4th Year', 'date': '5 days ago', 'students': '38'},
-      {'name': 'IT 1st Year A', 'date': '1 week ago', 'students': '50'},
-    ];
+    // Sample count data - replace with actual data from your database
+    int totalGroups = 12;
 
-    return _buildDashboardCard(
-      title: 'Recently Added Groups',
-      subtitle: '${recentGroups.length} new groups this month',
-      icon: Icons.group_add_rounded,
-      iconColor: const Color(0xFF4CAF50),
-      gradientColors: const [Color(0xFF4CAF50), const Color(0xFF4CAF50)],
-      child: Column(
-        children: [
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: recentGroups.length,
-              itemBuilder: (context, index) {
-                final group = recentGroups[index];
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const  Color(0xFF4CAF50).withOpacity(0.1)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF4CAF50).withOpacity(0.08),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              const Color(0xFF4CAF50).withOpacity(0.2),
-                              const Color(0xFF4CAF50).withOpacity(0.1)
-                            ],
-                          ),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(Icons.group_rounded, color: Color(0xFF4CAF50), size: 24),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              group['name']!,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 15,
-                                color: Color(0xFF2E2E2E),
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${group['students']} students • ${group['date']}',
-                              style: TextStyle(
-                                color: Colors.grey.shade600,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF4CAF50).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          group['students']!,
-                          style: const TextStyle(
-                            color: Color(0xFF4CAF50),
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-          Container(
-            margin: const EdgeInsets.only(top: 8),
-            child: TextButton.icon(
-              onPressed: () => _setCurrentSection('Groups'),
-              icon: const Icon(Icons.arrow_forward_rounded, size: 18),
-              label: const Text('View All Groups'),
-              style: TextButton.styleFrom(
-                foregroundColor: const Color(0xFF4CAF50),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              ),
-            ),
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF4CAF50), Color(0xFF45A049)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF4CAF50).withOpacity(0.3),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
         ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.groups_rounded,
+                color: Colors.white,
+                size: 32,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              totalGroups.toString(),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Groups',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildRecentStaffsCard() {
-    // Sample data - replace with actual data from your database
-    List<Map<String, String>> recentStaffs = [
-      {'name': 'Dr. Rajesh Kumar', 'dept': 'Computer Science', 'date': '1 day ago'},
-      {'name': 'Prof. Priya Sharma', 'dept': 'Electronics', 'date': '2 days ago'},
-      {'name': 'Mr. Arjun Patel', 'dept': 'Mechanical', 'date': '4 days ago'},
-      {'name': 'Ms. Kavya Reddy', 'dept': 'Information Tech', 'date': '6 days ago'},
-    ];
+    // Sample count data - replace with actual data from your database  
+    int totalStaffs = 25;
 
-    return _buildDashboardCard(
-      title: 'Recently Added Staff',
-      subtitle: '${recentStaffs.length} new staff members',
-      icon: Icons.person_add_rounded,
-      iconColor: const Color(0xFF4CAF50),
-      gradientColors: const [Color(0xFF4CAF50), Color(0xFF45A049)],
-      child: Column(
-        children: [
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: recentStaffs.length,
-              itemBuilder: (context, index) {
-                final staff = recentStaffs[index];
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFF4CAF50).withOpacity(0.1)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF4CAF50).withOpacity(0.08),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              const Color(0xFF4CAF50).withOpacity(0.2),
-                              const Color(0xFF4CAF50).withOpacity(0.1)
-                            ],
-                          ),
-                          borderRadius: BorderRadius.circular(24),
-                        ),
-                        child: const Icon(Icons.person_rounded, color: Color(0xFF4CAF50), size: 24),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              staff['name']!,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 15,
-                                color: Color(0xFF2E2E2E),
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${staff['dept']} • ${staff['date']}',
-                              style: TextStyle(
-                                color: Colors.grey.shade600,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF4CAF50),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-          Container(
-            margin: const EdgeInsets.only(top: 8),
-            child: TextButton.icon(
-              onPressed: () => _setCurrentSection('Teachers'),
-              icon: const Icon(Icons.arrow_forward_rounded, size: 18),
-              label: const Text('View All Staff'),
-              style: TextButton.styleFrom(
-                foregroundColor: const Color(0xFF4CAF50),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              ),
-            ),
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF4CAF50), Color(0xFF4CAF50)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF4CAF50).withOpacity(0.3),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
         ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.person_rounded,
+                color: Colors.white,
+                size: 32,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              totalStaffs.toString(),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Staff',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -781,6 +698,147 @@ Widget _buildDashboardContent() {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildLeastLeaveCard() {
+    // Sample data for the group with least leave today
+    Map<String, dynamic> leastLeaveGroup = {
+      'group': 'IT 3rd Year B',
+      'department': 'Information Technology',
+      'totalStudents': 48,
+      'leavesToday': 2,
+      'attendanceRate': 95.8,
+      'rank': '1st',
+    };
+
+    return Container(
+      height: 120,
+      margin: const EdgeInsets.symmetric(horizontal: 0),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF4CAF50), Color(0xFF4CAF50)],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF4CAF50).withOpacity(0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            // Icon section
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.emoji_events_rounded,
+                color: Colors.white,
+                size: 28,
+              ),
+            ),
+            const SizedBox(width: 16),
+            // Content section
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Row(
+                      children: [
+                        const Flexible(
+                          child: Text(
+                            'Best Attendance Today',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            leastLeaveGroup['rank'],
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    leastLeaveGroup['group'],
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Flexible(
+                    child: Text(
+                      '${leastLeaveGroup['leavesToday']} on leave • ${leastLeaveGroup['attendanceRate']}%',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 11,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Stats section
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '${leastLeaveGroup['totalStudents'] - leastLeaveGroup['leavesToday']}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  'Present',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.9),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
