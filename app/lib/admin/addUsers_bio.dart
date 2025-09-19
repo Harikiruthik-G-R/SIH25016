@@ -159,7 +159,7 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
             );
             
             double confidence = verifyResult['confidence'] ?? 0.0;
-            debugPrint("📊 Fingerprint similarity check with ${studentName}: ${(confidence * 100).toStringAsFixed(1)}%");
+            debugPrint("📊 Fingerprint similarity check with $studentName: ${(confidence * 100).toStringAsFixed(1)}%");
             
             if (confidence > 0.85) {
               debugPrint("❌ High similarity fingerprint match found: $studentName (${(confidence * 100).toStringAsFixed(1)}%)");
@@ -208,7 +208,7 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
             .get();
 
         for (var doc in biometricHashQuery.docs) {
-          final data = doc.data() as Map<String, dynamic>;
+          final data = doc.data();
           final studentName = data['name'] ?? 'Unknown';
           debugPrint("❌ Collection group biometric hash match found: $studentName");
           duplicates.add({
@@ -228,7 +228,7 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
             .get();
 
         for (var doc in fingerprintHashQuery.docs) {
-          final data = doc.data() as Map<String, dynamic>;
+          final data = doc.data();
           final studentName = data['name'] ?? 'Unknown';
           debugPrint("❌ Collection group fingerprint hash match found: $studentName");
           duplicates.add({
@@ -255,9 +255,9 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
 
       if (uniqueDuplicates.isNotEmpty) {
         debugPrint("❌ Duplicate fingerprint enrollments found:");
-        uniqueDuplicates.values.forEach((duplicate) {
+        for (var duplicate in uniqueDuplicates.values) {
           debugPrint("   - ${duplicate['student']} (${duplicate['type']})");
-        });
+        }
         return true;
       }
 

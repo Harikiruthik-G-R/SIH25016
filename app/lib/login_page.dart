@@ -264,9 +264,9 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       debugPrint("BiometricService verification - Confidence: ${(confidence * 100).toStringAsFixed(1)}%, Match: $isMatch");
 
       // Use a reasonable threshold for biometric matching
-      const double CONFIDENCE_THRESHOLD = 0.80;
+      const double confidenceThreshold = 0.80;
       
-      if (confidence >= CONFIDENCE_THRESHOLD || isMatch) {
+      if (confidence >= confidenceThreshold || isMatch) {
         debugPrint("BiometricService verification successful!");
         return true;
       }

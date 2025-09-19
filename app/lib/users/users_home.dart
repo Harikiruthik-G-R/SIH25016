@@ -3,6 +3,7 @@ import 'package:GeoAt/users/pages/academic.dart';
 import 'package:GeoAt/users/pages/assignments.dart';
 import 'package:GeoAt/users/pages/history.dart';
 import 'package:GeoAt/users/pages/markattendence.dart';
+import 'package:GeoAt/users/pages/onduty.dart';
 import 'package:GeoAt/users/pages/schedule.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -818,12 +819,22 @@ class _UserHomeScreenState extends State<UserHomeScreen>
       },
       {
         'icon': Icons.library_books_rounded,
-        'title': 'Resources',
-        'description': 'Study materials',
+        'title': 'On-Duty',
+        'description': 'Apply for On-Duty',
         'color': const Color(0xFF795548),
-        'onTap': () {
-          // Handle resources navigation
-        },
+        'onTap': ()=> Navigator.push(
+  context,
+  MaterialPageRoute(
+    builder: (context) => OnDutyApplyPage(
+     userName: widget.userName,
+              userEmail: widget.userEmail,
+              rollNumber: widget.rollNumber,
+              groupId: widget.groupId,
+              groupName: widget.groupName,
+              department: widget.department,
+    ),
+  ),
+),
       },
     ];
 

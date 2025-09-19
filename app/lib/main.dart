@@ -1,8 +1,6 @@
-import 'dart:math' as math;
 
 import 'package:GeoAt/admin/admin_home.dart';
 import 'package:GeoAt/login_page.dart';
-import 'package:GeoAt/services/biometricservices.dart';
 import 'package:GeoAt/sessionmanager.dart';
 import 'package:GeoAt/users/users_home.dart';
 import 'package:GeoAt/users/group_selection.dart';

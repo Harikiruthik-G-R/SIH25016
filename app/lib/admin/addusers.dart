@@ -812,12 +812,12 @@ Future<void> _registerBiometric(
       if (verificationDoc.exists) {
         final savedData = verificationDoc.data() as Map<String, dynamic>;
         debugPrint("🔍 Verification - Saved biometric fields:");
-        ['biometricHash', 'fingerprintHash', 'fingerprintTemplate', 'fingerprintData'].forEach((field) {
+        for (var field in ['biometricHash', 'fingerprintHash', 'fingerprintTemplate', 'fingerprintData']) {
           if (savedData.containsKey(field)) {
             final value = savedData[field].toString();
             debugPrint("   $field: ${value.length > 50 ? '${value.substring(0, 50)}...' : value}");
           }
-        });
+        }
       }
     } catch (e) {
       debugPrint("❌ Verification check failed: $e");

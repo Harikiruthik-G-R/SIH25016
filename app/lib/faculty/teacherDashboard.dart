@@ -93,48 +93,46 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
         continue;
       }
 
-      if (schedule != null) {
-        // Search through the schedule for teacher's subjects
-        for (var dayEntry in schedule.entries) {
-          final daySchedule = dayEntry.value;
-          print('📅 Processing day: ${dayEntry.key}, data type: ${daySchedule.runtimeType}');
-          
-          if (daySchedule is Map<String, dynamic>) {
-            for (var periodEntry in daySchedule.entries) {
-              final periodData = periodEntry.value;
-              print('⏰ Processing period: ${periodEntry.key}, data type: ${periodData.runtimeType}');
-              
-              if (periodData is Map<String, dynamic>) {
-                final subject = periodData['subject'] as String?;
-                print('📚 Found subject: $subject');
+      // Search through the schedule for teacher's subjects
+      for (var dayEntry in schedule.entries) {
+        final daySchedule = dayEntry.value;
+        print('📅 Processing day: ${dayEntry.key}, data type: ${daySchedule.runtimeType}');
+        
+        if (daySchedule is Map<String, dynamic>) {
+          for (var periodEntry in daySchedule.entries) {
+            final periodData = periodEntry.value;
+            print('⏰ Processing period: ${periodEntry.key}, data type: ${periodData.runtimeType}');
+            
+            if (periodData is Map<String, dynamic>) {
+              final subject = periodData['subject'] as String?;
+              print('📚 Found subject: $subject');
 
-                if (subject != null && widget.subjects.contains(subject)) {
-                  print('✅ Subject $subject matches teacher subjects');
-                  if (!subjectGroups.containsKey(subject)) {
-                    subjectGroups[subject] = [];
-                  }
-                  // Add group info if not already present
-                  bool groupExists = subjectGroups[subject]!.any(
-                    (group) => group['groupId'] == groupId,
-                  );
-                  if (!groupExists) {
-                    subjectGroups[subject]!.add({
-                      'groupId': groupId,
-                      'groupName': groupName,
-                    });
-                    print('✅ Added group $groupName to subject $subject');
-                  }
+              if (subject != null && widget.subjects.contains(subject)) {
+                print('✅ Subject $subject matches teacher subjects');
+                if (!subjectGroups.containsKey(subject)) {
+                  subjectGroups[subject] = [];
                 }
-              } else {
-                print('⚠️ Period data is not a Map: ${periodData.runtimeType}');
+                // Add group info if not already present
+                bool groupExists = subjectGroups[subject]!.any(
+                  (group) => group['groupId'] == groupId,
+                );
+                if (!groupExists) {
+                  subjectGroups[subject]!.add({
+                    'groupId': groupId,
+                    'groupName': groupName,
+                  });
+                  print('✅ Added group $groupName to subject $subject');
+                }
               }
+            } else {
+              print('⚠️ Period data is not a Map: ${periodData.runtimeType}');
             }
-          } else {
-            print('⚠️ Day schedule is not a Map: ${daySchedule.runtimeType}');
           }
+        } else {
+          print('⚠️ Day schedule is not a Map: ${daySchedule.runtimeType}');
         }
       }
-    }
+        }
 
     print('📊 Final subject groups mapping:');
     for (var entry in subjectGroups.entries) {
@@ -1100,7 +1098,7 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
   DateTime _selectedDate = DateTime.now();
   DateTimeRange? _selectedDateRange;
   List<Map<String, dynamic>> _attendanceRecords = [];
-  Map<String, List<String>> _groupStudents = {};
+  final Map<String, List<String>> _groupStudents = {};
   Map<String, int> _attendanceStats = {};
   String _selectedGroupFilter = 'All Groups';
   String _selectedStatusFilter = 'All Status';
@@ -3382,7 +3380,7 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
                   ],
                 ),
               );
-            }).toList(),
+            }),
           ],
         ),
       ),
@@ -3655,7 +3653,7 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
                     ],
                   ),
                 );
-              }).toList(),
+              }),
           ],
         ),
       ),
@@ -3846,7 +3844,7 @@ class _SubjectAttendanceScreenState extends State<SubjectAttendanceScreen>
 
             groupedStudents[groupKey]!.add(studentRecord);
             print(
-              '✅ Added $rollNumber to $groupKey (${attendanceRate}% attendance)',
+              '✅ Added $rollNumber to $groupKey ($attendanceRate% attendance)',
             );
           }
 
