@@ -18,6 +18,8 @@ class SessionManager {
   static const String _keyLoginTime = 'loginTime';
   static const String _keyLastActivity = 'lastActivity';
 
+  static var groupId;
+
   /// Save complete session with all user data
   /// This method stores all user information securely in SharedPreferences
   static Future<void> saveSession({
