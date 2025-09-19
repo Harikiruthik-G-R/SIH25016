@@ -1,7 +1,10 @@
+
 import 'package:GeoAt/admin/admin_home.dart';
+import 'package:GeoAt/login_page.dart';
 import 'package:GeoAt/sessionmanager.dart';
 import 'package:GeoAt/users/users_home.dart';
 import 'package:GeoAt/users/group_selection.dart';
+import 'faculty/teacherDashboard.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:io';
@@ -9,7 +12,6 @@ import 'dart:ui';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
-import 'package:flutter_background_service_android/flutter_background_service_android.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
@@ -511,6 +513,19 @@ class MyApp extends StatelessWidget {
                     department: args['department'] ?? '',
                   ),
             );
+          case '/teacherDashboard':
+            final args = settings.arguments as Map<String, dynamic>? ?? {};
+            return MaterialPageRoute(
+              builder:
+                  (context) => TeacherDashboard(
+                    teacherId: args['teacherId'] ?? '',
+                    teacherName: args['name'] ?? 'Teacher',
+                    teacherEmail: args['email'] ?? 'teacher@example.com',
+                    subjects: List<String>.from(args['subjects'] ?? []),
+                    department: args['department'] ?? '',
+                    designation: args['designation'] ?? '',
+                  ),
+            );
           default:
             return MaterialPageRoute(builder: (context) => const LoginPage());
         }
@@ -620,8 +635,17 @@ class _SplashScreenState extends State<SplashScreen>
         }
 
         // User has valid session - navigate to appropriate home screen
+        String route;
+        if (session['isAdmin'] == true) {
+          route = '/admin';
+        } else if (session['isTeacher'] == true) {
+          route = '/teacherDashboard';
+        } else {
+          route = '/students';
+        }
+
         Navigator.of(context).pushReplacementNamed(
-          session['isAdmin'] == true ? '/admin' : '/students',
+          route,
           arguments: {
             'userName': session['userName'] ?? '',
             'userEmail': session['userEmail'] ?? '',
@@ -629,6 +653,16 @@ class _SplashScreenState extends State<SplashScreen>
             'groupId': session['groupId'] ?? '',
             'groupName': session['groupName'] ?? '',
             'department': session['department'] ?? '',
+            // Teacher-specific arguments with correct keys
+            'teacherId': session['teacherId'] ?? '',
+            'name':
+                session['userName'] ?? '', // Use correct key for teacher name
+            'email':
+                session['userEmail'] ?? '', // Use correct key for teacher email
+            'subjects':
+                session['teacherSubjects'] ??
+                [], // Use correct key for subjects
+            'designation': session['designation'] ?? '',
           },
         );
       } else {
@@ -1086,626 +1120,6 @@ class OnboardingPage extends StatelessWidget {
 }
 
 // Enhanced Login Page - Online only
-class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
-
-  @override
-  State<LoginPage> createState() => _LoginPageState();
-}
-
-class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
-  final TextEditingController loginController = TextEditingController();
-  final TextEditingController passwordController = TextEditingController();
-  bool isLoading = false;
-  bool obscurePassword = true;
-  late AnimationController _animationController;
-  final _formKey = GlobalKey<FormState>();
-  String selectedRole = 'Admin';
-  final List<String> roles = ['Admin', 'Student'];
-
-  @override
-  void initState() {
-    super.initState();
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 600),
-      vsync: this,
-    )..forward();
-  }
-
-  @override
-  void dispose() {
-    _animationController.dispose();
-    loginController.dispose();
-    passwordController.dispose();
-    super.dispose();
-  }
-
-  Future<void> loginUser() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    final loginValue = loginController.text.trim();
-    final password = passwordController.text.trim();
-
-    debugPrint("🔑 Login attempt:");
-    debugPrint("➡️ loginValue: $loginValue");
-    debugPrint("➡️ password: $password");
-    debugPrint("➡️ selectedRole: $selectedRole");
-
-    setState(() => isLoading = true);
-
-    try {
-      // check if password is a phone number (all digits and length >= 10)
-      final isPhoneLike = RegExp(
-        r'^[0-9]{10,}$',
-      ).hasMatch(password); // FIXED REGEX
-      debugPrint("📱 Is password phone number? $isPhoneLike");
-
-      if (selectedRole == 'Admin') {
-        debugPrint("🔧 Attempting admin login...");
-        await _loginAdmin(loginValue, password);
-      } else {
-        debugPrint("👨‍🎓 Attempting student login...");
-        // just send password, no extra args
-        await _loginStudent(loginValue, password);
-      }
-    } on TimeoutException {
-      _showError("Connection timeout. Please check your internet connection.");
-    } catch (e) {
-      debugPrint("❌ Login error: $e");
-
-      if (e.toString().contains('network') ||
-          e.toString().contains('timeout')) {
-        _showError("Network error. Please check your internet connection.");
-      } else if (e.toString().contains('Invalid credentials')) {
-        _showError(e.toString().replaceAll('Exception: ', ''));
-      } else {
-        _showError("Login failed. Please try again.");
-      }
-    } finally {
-      if (mounted) {
-        setState(() => isLoading = false);
-      }
-    }
-  }
-
-  Future<void> _loginAdmin(String email, String password) async {
-    final querySnapshot = await FirebaseFirestore.instance
-        .collection('admins')
-        .where('email', isEqualTo: email)
-        .limit(1)
-        .get()
-        .timeout(const Duration(seconds: 15));
-
-    if (querySnapshot.docs.isEmpty) {
-      throw Exception("Invalid admin credentials. Please check your email.");
-    }
-
-    final data = querySnapshot.docs.first.data();
-    final storedPassword = (data['password'] ?? '').toString();
-
-    if (storedPassword != password) {
-      throw Exception("Invalid credentials. Please check your password.");
-    }
-
-    await SessionManager.saveSession(
-      isLoggedIn: true,
-      isAdmin: true,
-      userName: (data['name'] ?? '').toString(),
-      userEmail: (data['email'] ?? '').toString(),
-    );
-
-    if (!mounted) return;
-    Navigator.pushNamed(
-      context,
-      '/tickscreen',
-      arguments: {
-        'isAdmin': true,
-        'name': data['name'],
-        'email': data['email'],
-      },
-    );
-  }
-
-  Future<void> _loginStudent(String loginValue, String password) async {
-    QuerySnapshot querySnapshot;
-
-    // Detect login type: email, phone (10 digits), or roll number
-    bool isEmail = loginValue.contains('@');
-    bool isPhone = RegExp(r'^\d{10}$').hasMatch(loginValue);
-
-    try {
-      // Query Firestore based on login type
-      if (isEmail) {
-        querySnapshot = await FirebaseFirestore.instance
-            .collectionGroup('students')
-            .where('email', isEqualTo: loginValue.trim())
-            .limit(1)
-            .get()
-            .timeout(const Duration(seconds: 15));
-      } else if (isPhone) {
-        querySnapshot = await FirebaseFirestore.instance
-            .collectionGroup('students')
-            .where('phone', isEqualTo: loginValue.trim())
-            .limit(1)
-            .get()
-            .timeout(const Duration(seconds: 15));
-      } else {
-        querySnapshot = await FirebaseFirestore.instance
-            .collectionGroup('students')
-            .where('rollNumber', isEqualTo: loginValue.trim())
-            .limit(1)
-            .get()
-            .timeout(const Duration(seconds: 15));
-      }
-
-      if (querySnapshot.docs.isEmpty) {
-        throw Exception(
-          "Invalid student credentials. Please check your ${isEmail
-              ? 'email'
-              : isPhone
-              ? 'phone number'
-              : 'roll number'}.",
-        );
-      }
-
-      final data = querySnapshot.docs.first.data() as Map<String, dynamic>;
-      final storedPassword = (data['password'] ?? '').toString();
-
-      // 🔑 Unified password / phone validation
-      if (RegExp(r'^\d{10}$').hasMatch(password.trim())) {
-        // If password looks like a phone number → match with phone field
-        if (data['phone'].toString().trim() != password.trim()) {
-          throw Exception(
-            "Invalid credentials. Please check your phone number.",
-          );
-        }
-      } else {
-        // Normal password match
-        if (storedPassword.trim() != password.trim()) {
-          throw Exception("Invalid credentials. Please check your password.");
-        }
-      }
-
-      if (!mounted) return;
-
-      debugPrint("✅ Student login successful for: ${data['name']}");
-      debugPrint("🎯 Navigating to group selection screen...");
-
-      // Navigate to Group Selection Screen for students to choose their group
-      Navigator.pushNamed(
-        context,
-        '/groupselection',
-        arguments: {
-          'name': data['name'],
-          'email': data['email'],
-          'rollNumber': data['rollNumber'],
-          'department': data['department'],
-        },
-      );
-    } catch (e) {
-      debugPrint("Login error: $e");
-      throw Exception("Login failed. Please try again.");
-    }
-  }
-
-  void _showError(String message) {
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.error_outline, color: Colors.white),
-            const SizedBox(width: 8),
-            Expanded(child: Text(message)),
-          ],
-        ),
-        backgroundColor: Colors.red.shade400,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.all(16),
-        duration: const Duration(seconds: 4),
-      ),
-    );
-  }
-
-  String? _validateLogin(String? value) {
-    if (value == null || value.isEmpty) {
-      return selectedRole == 'Admin'
-          ? 'Please enter your email'
-          : 'Please enter your roll number or email';
-    }
-
-    if (selectedRole == 'Admin') {
-      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
-        // FIXED REGEX
-        return 'Please enter a valid email';
-      }
-    }
-    return null;
-  }
-
-  String? _validatePassword(String? value) {
-    if (value == null || value.isEmpty) {
-      return 'Please enter your password';
-    }
-    if (value.length < 3) {
-      return 'Password must be at least 3 characters';
-    }
-    return null;
-  }
-
-  Widget _buildInputField({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-    bool obscureText = false,
-    TextInputType keyboardType = TextInputType.text,
-    String? Function(String?)? validator,
-    Widget? suffixIcon,
-    String? hintText,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF2E2E2E),
-          ),
-        ),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: controller,
-          obscureText: obscureText,
-          keyboardType: keyboardType,
-          validator: validator,
-          style: const TextStyle(fontSize: 16),
-          decoration: InputDecoration(
-            hintText: hintText ?? 'Enter your ${label.toLowerCase()}',
-            prefixIcon: Icon(icon, color: const Color(0xFF4CAF50)),
-            suffixIcon: suffixIcon,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(color: Colors.grey.shade300),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide(color: Colors.grey.shade300),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: Color(0xFF4CAF50), width: 2),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: const BorderSide(color: Colors.red, width: 2),
-            ),
-            filled: true,
-            fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 16,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildRoleDropdown() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Role',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF2E2E2E),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.shade300),
-            color: Colors.white,
-          ),
-          child: DropdownButtonFormField<String>(
-            value: selectedRole,
-            decoration: InputDecoration(
-              prefixIcon: const Icon(Icons.person, color: Color(0xFF4CAF50)),
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 16,
-              ),
-            ),
-            items:
-                roles.map((String role) {
-                  return DropdownMenuItem<String>(
-                    value: role,
-                    child: Text(role),
-                  );
-                }).toList(),
-            onChanged: (String? newValue) {
-              setState(() {
-                selectedRole = newValue!;
-                // Clear the login field when switching roles
-                loginController.clear();
-              });
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Colors.white, Color(0xFFF0F8F0)],
-          ),
-        ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24.0),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Back button
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.arrow_back),
-                    style: IconButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      shape: const CircleBorder(),
-                      padding: const EdgeInsets.all(12),
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // Welcome section
-                  SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(0, 0.3),
-                      end: Offset.zero,
-                    ).animate(
-                      CurvedAnimation(
-                        parent: _animationController,
-                        curve: Curves.easeOut,
-                      ),
-                    ),
-                    child: FadeTransition(
-                      opacity: _animationController,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Welcome Back!',
-                            style: TextStyle(
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF2E2E2E),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Sign in to your account to continue',
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 40),
-
-                  // Role selection
-                  SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(0, 0.3),
-                      end: Offset.zero,
-                    ).animate(
-                      CurvedAnimation(
-                        parent: _animationController,
-                        curve: const Interval(0.1, 1.0, curve: Curves.easeOut),
-                      ),
-                    ),
-                    child: FadeTransition(
-                      opacity: _animationController,
-                      child: _buildRoleDropdown(),
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // Login field
-                  SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(0, 0.3),
-                      end: Offset.zero,
-                    ).animate(
-                      CurvedAnimation(
-                        parent: _animationController,
-                        curve: const Interval(0.2, 1.0, curve: Curves.easeOut),
-                      ),
-                    ),
-                    child: FadeTransition(
-                      opacity: _animationController,
-                      child: _buildInputField(
-                        controller: loginController,
-                        label:
-                            selectedRole == 'Admin'
-                                ? 'Email'
-                                : 'Roll Number / Email',
-                        icon:
-                            selectedRole == 'Admin' ? Icons.email : Icons.badge,
-                        keyboardType:
-                            selectedRole == 'Admin'
-                                ? TextInputType.emailAddress
-                                : TextInputType.text,
-                        validator: _validateLogin,
-                        hintText:
-                            selectedRole == 'Admin'
-                                ? 'Enter your email address'
-                                : 'Enter roll number or email',
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // Password field
-                  SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(0, 0.3),
-                      end: Offset.zero,
-                    ).animate(
-                      CurvedAnimation(
-                        parent: _animationController,
-                        curve: const Interval(0.3, 1.0, curve: Curves.easeOut),
-                      ),
-                    ),
-                    child: FadeTransition(
-                      opacity: _animationController,
-                      child: _buildInputField(
-                        controller: passwordController,
-                        label: 'Password',
-                        icon: Icons.lock,
-                        obscureText: obscurePassword,
-                        validator: _validatePassword,
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            obscurePassword
-                                ? Icons.visibility
-                                : Icons.visibility_off,
-                            color: const Color(0xFF4CAF50),
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              obscurePassword = !obscurePassword;
-                            });
-                          },
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 40),
-
-                  // Login button
-                  SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(0, 0.3),
-                      end: Offset.zero,
-                    ).animate(
-                      CurvedAnimation(
-                        parent: _animationController,
-                        curve: const Interval(0.4, 1.0, curve: Curves.easeOut),
-                      ),
-                    ),
-                    child: FadeTransition(
-                      opacity: _animationController,
-                      child: Container(
-                        width: double.infinity,
-                        height: 56,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF4CAF50), Color(0xFF66BB6A)],
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFF4CAF50).withOpacity(0.3),
-                              blurRadius: 15,
-                              offset: const Offset(0, 8),
-                            ),
-                          ],
-                        ),
-                        child: ElevatedButton(
-                          onPressed: isLoading ? null : loginUser,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.transparent,
-                            shadowColor: Colors.transparent,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                          ),
-                          child:
-                              isLoading
-                                  ? const SizedBox(
-                                    height: 24,
-                                    width: 24,
-                                    child: CircularProgressIndicator(
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                        Colors.white,
-                                      ),
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                  : const Text(
-                                    'Sign In',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // Connection status indicator
-                  Center(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFF4CAF50),
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Connected to server',
-                          style: TextStyle(
-                            color: Colors.grey.shade600,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 // Tick Animation Screen
 class TickAnimation extends StatefulWidget {
