@@ -5,14 +5,15 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
+import 'dart:async';
 import 'statistics_screen.dart';
 import 'groups.dart';
 import 'addusers.dart';
 import 'coordinates.dart';
-import 'search_screen.dart';
 import 'active_users.dart';
 import 'timetable_screen.dart';
 import 'teachers_screen.dart';
+import 'onduty.dart';
 
 class AdminHomeScreen extends StatefulWidget {
   final String userName;
@@ -43,41 +44,846 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
   void _showProfileDialog() {
     showDialog(
       context: context,
-      builder:
-          (context) => ProfileDialog(
-            currentImageUrl: _profileImageUrl,
-            currentCollegeName: _collegeName,
-            currentStaffName: _staffName,
-            currentDesignation: _designation,
-            onProfileUpdated: (imageUrl, collegeName, staffName, designation) {
-              setState(() {
-                _profileImageUrl = imageUrl;
-                _collegeName = collegeName;
-                _staffName = staffName;
-                _designation = designation;
-              });
-            },
-          ),
+      builder: (context) => ProfileDialog(
+        currentImageUrl: _profileImageUrl,
+        currentCollegeName: _collegeName,
+        currentStaffName: _staffName,
+        currentDesignation: _designation,
+        onProfileUpdated: (imageUrl, collegeName, staffName, designation) {
+          setState(() {
+            _profileImageUrl = imageUrl;
+            _collegeName = collegeName;
+            _staffName = staffName;
+            _designation = designation;
+          });
+        },
+      ),
     );
   }
 
-  Widget _buildDashboardContent() {
-    return Center(
+Widget _buildDashboardContent() {
+  return Container(
+    color: const Color(0xFFF8F9FA),
+    child: Padding(
+      padding: const EdgeInsets.all(24.0),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.dashboard, size: 80, color: Color(0xFF4CAF50)),
-          SizedBox(height: 20),
-          Text(
-            'Dashboard Content',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                StreamBuilder<DateTime>(
+                  stream: Stream.periodic(const Duration(seconds: 1), (_) => DateTime.now()),
+                  initialData: DateTime.now(),
+                  builder: (context, snapshot) {
+                    final now = snapshot.data ?? DateTime.now();
+                    final dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                    final monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(colors: [Color(0xFF4CAF50), Color(0xFF45A049)]),
+                        borderRadius: BorderRadius.circular(25),
+                        boxShadow: [BoxShadow(color: const Color(0xFF4CAF50).withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 2))],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.calendar_today, color: Colors.white, size: 18),
+                          const SizedBox(width: 8),
+                          Text(
+                            '${dayNames[now.weekday % 7]}, ${monthNames[now.month - 1]} ${now.day}, ${now.year}',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 16),
+                          ),
+                          const SizedBox(width: 16),
+                          const Icon(Icons.access_time, color: Colors.white, size: 18),
+                          const SizedBox(width: 8),
+                          Text(
+                            '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 16),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
-          SizedBox(height: 10),
-          Text(
-            'Welcome to the admin dashboard!',
-            style: TextStyle(fontSize: 16, color: Colors.grey.shade700),
+          Expanded(child: _buildResponsiveGrid()),
+        ],
+      ),
+    ),
+  );
+}
+ Widget _buildResponsiveGrid() {
+  // Use MediaQuery instead of LayoutBuilder to avoid layout recursion
+  final screenWidth = MediaQuery.of(context).size.width;
+  
+  if (screenWidth > 1400) {
+    // Extra Large Desktop - 4 columns
+    return _buildFourColumnLayout();
+  } else if (screenWidth > 1000) {
+    // Large Desktop - 4 columns with smaller spacing
+    return _buildFourColumnLayout(spacing: 12);
+  } else if (screenWidth > 800) {
+    // Tablet - 2x2 grid
+    return _buildTwoByTwoLayout();
+  } else if (screenWidth > 600) {
+    // Small tablet - 2 columns
+    return _buildTwoColumnLayout();
+  } else {
+    // Mobile - Single column
+    return _buildSingleColumnLayout();
+  }
+}
+  Widget _buildFourColumnLayout({double spacing = 16}) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          flex: 1,
+          child: _buildRecentGroupsCard(),
+        ),
+        SizedBox(width: spacing),
+        Expanded(
+          flex: 1,
+          child: _buildRecentStaffsCard(),
+        ),
+        SizedBox(width: spacing),
+        Expanded(
+          flex: 1,
+          child: _buildTodayLeaveRankingCard(),
+        ),
+        SizedBox(width: spacing),
+        Expanded(
+          flex: 1,
+          child: _buildSemesterLeaveRankingCard(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTwoByTwoLayout() {
+    return Column(
+      children: [
+        Expanded(
+          child: Row(
+            children: [
+              Expanded(child: _buildRecentGroupsCard()),
+              const SizedBox(width: 16),
+              Expanded(child: _buildRecentStaffsCard()),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        Expanded(
+          child: Row(
+            children: [
+              Expanded(child: _buildTodayLeaveRankingCard()),
+              const SizedBox(width: 16),
+              Expanded(child: _buildSemesterLeaveRankingCard()),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTwoColumnLayout() {
+    return Column(
+      children: [
+        Expanded(
+          child: Row(
+            children: [
+              Expanded(child: _buildRecentGroupsCard()),
+              const SizedBox(width: 16),
+              Expanded(child: _buildRecentStaffsCard()),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        Expanded(
+          child: Row(
+            children: [
+              Expanded(child: _buildTodayLeaveRankingCard()),
+              const SizedBox(width: 16),
+              Expanded(child: _buildSemesterLeaveRankingCard()),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSingleColumnLayout() {
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          SizedBox(
+            height: 300,
+            child: _buildRecentGroupsCard(),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 300,
+            child: _buildRecentStaffsCard(),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 350,
+            child: _buildTodayLeaveRankingCard(),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 350,
+            child: _buildSemesterLeaveRankingCard(),
+          ),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRecentGroupsCard() {
+    // Sample data - replace with actual data from your database
+    List<Map<String, String>> recentGroups = [
+      {'name': 'CSE 3rd Year A', 'date': '2 days ago', 'students': '45'},
+      {'name': 'ECE 2nd Year B', 'date': '3 days ago', 'students': '42'},
+      {'name': 'MECH 4th Year', 'date': '5 days ago', 'students': '38'},
+      {'name': 'IT 1st Year A', 'date': '1 week ago', 'students': '50'},
+    ];
+
+    return _buildDashboardCard(
+      title: 'Recently Added Groups',
+      subtitle: '${recentGroups.length} new groups this month',
+      icon: Icons.group_add_rounded,
+      iconColor: const Color(0xFF4CAF50),
+      gradientColors: const [Color(0xFF4CAF50), const Color(0xFF4CAF50)],
+      child: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              itemCount: recentGroups.length,
+              itemBuilder: (context, index) {
+                final group = recentGroups[index];
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const  Color(0xFF4CAF50).withOpacity(0.1)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF4CAF50).withOpacity(0.08),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              const Color(0xFF4CAF50).withOpacity(0.2),
+                              const Color(0xFF4CAF50).withOpacity(0.1)
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.group_rounded, color: Color(0xFF4CAF50), size: 24),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              group['name']!,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 15,
+                                color: Color(0xFF2E2E2E),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${group['students']} students • ${group['date']}',
+                              style: TextStyle(
+                                color: Colors.grey.shade600,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF4CAF50).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          group['students']!,
+                          style: const TextStyle(
+                            color: Color(0xFF4CAF50),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+          Container(
+            margin: const EdgeInsets.only(top: 8),
+            child: TextButton.icon(
+              onPressed: () => _setCurrentSection('Groups'),
+              icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+              label: const Text('View All Groups'),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF4CAF50),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+            ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildRecentStaffsCard() {
+    // Sample data - replace with actual data from your database
+    List<Map<String, String>> recentStaffs = [
+      {'name': 'Dr. Rajesh Kumar', 'dept': 'Computer Science', 'date': '1 day ago'},
+      {'name': 'Prof. Priya Sharma', 'dept': 'Electronics', 'date': '2 days ago'},
+      {'name': 'Mr. Arjun Patel', 'dept': 'Mechanical', 'date': '4 days ago'},
+      {'name': 'Ms. Kavya Reddy', 'dept': 'Information Tech', 'date': '6 days ago'},
+    ];
+
+    return _buildDashboardCard(
+      title: 'Recently Added Staff',
+      subtitle: '${recentStaffs.length} new staff members',
+      icon: Icons.person_add_rounded,
+      iconColor: const Color(0xFF4CAF50),
+      gradientColors: const [Color(0xFF4CAF50), Color(0xFF45A049)],
+      child: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              itemCount: recentStaffs.length,
+              itemBuilder: (context, index) {
+                final staff = recentStaffs[index];
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF4CAF50).withOpacity(0.1)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF4CAF50).withOpacity(0.08),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              const Color(0xFF4CAF50).withOpacity(0.2),
+                              const Color(0xFF4CAF50).withOpacity(0.1)
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                        child: const Icon(Icons.person_rounded, color: Color(0xFF4CAF50), size: 24),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              staff['name']!,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 15,
+                                color: Color(0xFF2E2E2E),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${staff['dept']} • ${staff['date']}',
+                              style: TextStyle(
+                                color: Colors.grey.shade600,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF4CAF50),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+          Container(
+            margin: const EdgeInsets.only(top: 8),
+            child: TextButton.icon(
+              onPressed: () => _setCurrentSection('Teachers'),
+              icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+              label: const Text('View All Staff'),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF4CAF50),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTodayLeaveRankingCard() {
+    // Sample data - replace with actual data from your database
+    List<Map<String, dynamic>> todayLeaves = [
+      {'group': 'CSE 3rd Year A', 'leaves': 12, 'total': 45},
+      {'group': 'ECE 2nd Year B', 'leaves': 8, 'total': 42},
+      {'group': 'MECH 4th Year', 'leaves': 7, 'total': 38},
+      {'group': 'IT 1st Year A', 'leaves': 5, 'total': 50},
+    ];
+
+    return _buildDashboardCard(
+      title: 'Today\'s Leave Ranking',
+      subtitle: 'Real-time absence tracking',
+      icon: Icons.today_rounded,
+      iconColor: const Color(0xFFFF9800),
+      gradientColors: const [Color.fromARGB(255, 238, 105, 4), Color.fromARGB(255, 238, 105, 4)],
+      child: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              itemCount: todayLeaves.length,
+              itemBuilder: (context, index) {
+                final data = todayLeaves[index];
+                double percentage = (data['leaves'] / data['total']) * 100;
+                
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color.fromARGB(255, 238, 105, 4).withOpacity(0.1)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color.fromARGB(255, 238, 105, 4).withOpacity(0.08),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color.fromARGB(255, 238, 105, 4), Color.fromARGB(255, 238, 105, 4)],
+                              ),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Center(
+                              child: Text(
+                                '${index + 1}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  data['group'],
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 15,
+                                    color: Color(0xFF2E2E2E),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${data['leaves']} out of ${data['total']} students',
+                                  style: TextStyle(
+                                    color: Colors.grey.shade600,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color.fromARGB(255, 238, 105, 4).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              '${percentage.toStringAsFixed(1)}%',
+                              style: const TextStyle(
+                                color: Color.fromARGB(255, 238, 105, 4),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        height: 6,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(3),
+                          color: Colors.grey.shade200,
+                        ),
+                        child: FractionallySizedBox(
+                          alignment: Alignment.centerLeft,
+                          widthFactor: percentage / 100,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(3),
+                              gradient: const LinearGradient(
+                                colors: [Color.fromARGB(255, 238, 105, 4), Color.fromARGB(255, 238, 105, 4)],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+          Container(
+            margin: const EdgeInsets.only(top: 8),
+            child: TextButton.icon(
+              onPressed: () => _setCurrentSection('Statistics'),
+              icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+              label: const Text('View Detailed Stats'),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color.fromARGB(255, 238, 105, 4),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSemesterLeaveRankingCard() {
+    // Sample data - replace with actual data from your database
+    List<Map<String, dynamic>> semesterLeaves = [
+      {'group': 'ECE 2nd Year B', 'leaves': 245, 'total': 2100, 'trend': 'up'},
+      {'group': 'CSE 3rd Year A', 'leaves': 198, 'total': 2250, 'trend': 'down'},
+      {'group': 'MECH 4th Year', 'leaves': 156, 'total': 1900, 'trend': 'stable'},
+      {'group': 'IT 1st Year A', 'leaves': 142, 'total': 2500, 'trend': 'up'},
+    ];
+
+    return _buildDashboardCard(
+      title: 'Semester Leave Ranking',
+      subtitle: 'Complete semester overview',
+      icon: Icons.calendar_month_rounded,
+      iconColor: const Color.fromARGB(255, 237, 6, 6),
+      gradientColors: const [Color.fromARGB(255, 237, 6, 6), Color.fromARGB(255, 237, 6, 6)],
+      child: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              itemCount: semesterLeaves.length,
+              itemBuilder: (context, index) {
+                final data = semesterLeaves[index];
+                double percentage = (data['leaves'] / data['total']) * 100;
+                IconData trendIcon = data['trend'] == 'up' 
+                    ? Icons.trending_up_rounded 
+                    : data['trend'] == 'down' 
+                    ? Icons.trending_down_rounded 
+                    : Icons.trending_flat_rounded;
+                Color trendColor = data['trend'] == 'up' 
+                    ? Colors.red 
+                    : data['trend'] == 'down' 
+                    ? Colors.green 
+                    : Colors.grey;
+                
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color.fromARGB(255, 237, 6, 6).withOpacity(0.1)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color.fromARGB(255, 237, 6, 6).withOpacity(0.08),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color.fromARGB(255, 237, 6, 6), Color.fromARGB(255, 237, 6, 6)],
+                              ),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Center(
+                              child: Text(
+                                '${index + 1}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  data['group'],
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 15,
+                                    color: Color(0xFF2E2E2E),
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    Text(
+                                      '${data['leaves']} total leaves',
+                                      style: TextStyle(
+                                        color: Colors.grey.shade600,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Icon(trendIcon, color: trendColor, size: 16),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color.fromARGB(255, 237, 6, 6).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              '${percentage.toStringAsFixed(1)}%',
+                              style: const TextStyle(
+                                color: Color.fromARGB(255, 237, 6, 6),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        height: 6,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(3),
+                          color: Colors.grey.shade200,
+                        ),
+                        child: FractionallySizedBox(
+                          alignment: Alignment.centerLeft,
+                          widthFactor: percentage / 100,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(3),
+                              gradient: const LinearGradient(
+                                colors: [Color.fromARGB(255, 237, 6, 6), Color.fromARGB(255, 237, 6, 6)],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+          Container(
+            margin: const EdgeInsets.only(top: 8),
+            child: TextButton.icon(
+              onPressed: () => _setCurrentSection('Statistics'),
+              icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+              label: const Text('View Full Report'),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color.fromARGB(255, 237, 6, 6),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDashboardCard({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color iconColor,
+    required List<Color> gradientColors,
+    required Widget child,
+  }) {
+    return Container(
+      height: double.infinity,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white,
+            Colors.grey.shade50.withOpacity(0.5),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 20,
+            spreadRadius: 0,
+            offset: const Offset(0, 8),
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 6,
+            spreadRadius: 0,
+            offset: const Offset(0, 2),
+          ),
+        ],
+        border: Border.all(
+          color: Colors.white.withOpacity(0.9),
+          width: 1,
+        ),
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Enhanced Card Header
+            Container(
+              padding: const EdgeInsets.only(bottom: 20),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: gradientColors,
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: iconColor.withOpacity(0.3),
+                          blurRadius: 12,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Icon(icon, color: Colors.white, size: 28),
+                  ),
+                  const SizedBox(width: 20),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF2E2E2E),
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          subtitle,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey.shade600,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Card Content
+            Expanded(child: child),
+          ],
+        ),
       ),
     );
   }
@@ -118,30 +924,32 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
     });
   }
 
-  Widget _getSection() {
-    switch (_currentSection) {
-      case 'Dashboard':
-        return _buildDashboardContent();
-      case 'Groups':
-        return GroupsScreen();
-      case 'Schedules':
-        return AddUsersScreen(groupData: {});
-      case 'Set Coordinates':
-        return CoordinatesScreen();
-      case 'Teachers':
-        return TeachersScreen();
-      case 'Active Users':
-        return ActiveUsersScreen();
-      case 'Statistics':
-        return StatisticsScreen();
-      case 'Timetable':
-        return TimetableScreen();
-      case 'Search':
-        return SearchScreen();
-      default:
-        return _buildDashboardContent();
-    }
+ // ...existing code...
+Widget _getSection() {
+  switch (_currentSection) {
+    case 'Dashboard':
+      return _buildDashboardContent();
+    case 'Groups':
+      return const GroupsScreen();
+    case 'Schedules':
+      return AddUsersScreen(groupData: const {});
+    case 'Set Coordinates':
+      return const CoordinatesScreen();
+    case 'Teachers':
+      return const TeachersScreen();
+    case 'Active Users':
+      return const ActiveUsersScreen();
+    case 'Statistics':
+      return const StatisticsScreen();
+    case 'Timetable':
+      return const TimetableScreen();
+    case 'Onduty':
+      return const OnDutyScreen();
+    default:
+      return _buildDashboardContent();
   }
+}
+// ...existing code...
 
   void _toggleMenu() {
     setState(() {
@@ -205,27 +1013,25 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
                 child: CircleAvatar(
                   radius: 16,
                   backgroundColor: const Color(0xFF4CAF50).withOpacity(0.1),
-                  child:
-                      _isLoading
-                          ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                          : _profileImageUrl != null
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : _profileImageUrl != null
                           ? CachedNetworkImage(
-                            imageUrl: _profileImageUrl!,
-                            imageBuilder:
-                                (context, imageProvider) => Container(
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    image: DecorationImage(
-                                      image: imageProvider,
-                                      fit: BoxFit.cover,
-                                    ),
+                              imageUrl: _profileImageUrl!,
+                              imageBuilder: (context, imageProvider) => Container(
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  image: DecorationImage(
+                                    image: imageProvider,
+                                    fit: BoxFit.cover,
                                   ),
                                 ),
-                          )
+                              ),
+                            )
                           : _buildDefaultAvatar(),
                 ),
               ),
@@ -275,19 +1081,10 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
                                   onTap: () => _setCurrentSection('Groups'),
                                 ),
                                 _buildMenuItem(
-                                  icon: Icons.person_add_outlined,
-                                  title: 'Add Users',
-                                  isSelected: _currentSection == 'Add Users',
-                                  onTap: () => _setCurrentSection('Add Users'),
-                                ),
-                                _buildMenuItem(
                                   icon: Icons.location_on_outlined,
                                   title: 'Set Coordinates',
-                                  isSelected:
-                                      _currentSection == 'Set Coordinates',
-                                  onTap:
-                                      () =>
-                                          _setCurrentSection('Set Coordinates'),
+                                  isSelected: _currentSection == 'Set Coordinates',
+                                  onTap: () => _setCurrentSection('Set Coordinates'),
                                 ),
                                 _buildMenuItem(
                                   icon: Icons.schedule_outlined,
@@ -303,16 +1100,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
                                 ),
                                 _buildMenuItem(
                                   icon: Icons.search_outlined,
-                                  title: 'Search',
-                                  isSelected: _currentSection == 'Search',
-                                  onTap: () => _setCurrentSection('Search'),
-                                ),
-                                _buildMenuItem(
-                                  icon: Icons.people_outline,
-                                  title: 'Active Users',
-                                  isSelected: _currentSection == 'Active Users',
-                                  onTap:
-                                      () => _setCurrentSection('Active Users'),
+                                  title: 'Onduty',
+                                  isSelected: _currentSection == 'Onduty',
+                                  onTap: () => _setCurrentSection('Onduty'),
                                 ),
                                 _buildMenuItem(
                                   icon: Icons.bar_chart_outlined,
@@ -418,12 +1208,6 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
                         onTap: () => _setCurrentSection('Groups'),
                       ),
                       _buildMenuItem(
-                        icon: Icons.person_add_outlined,
-                        title: 'Add Users',
-                        isSelected: _currentSection == 'Add Users',
-                        onTap: () => _setCurrentSection('Add Users'),
-                      ),
-                      _buildMenuItem(
                         icon: Icons.location_on_outlined,
                         title: 'Set Coordinates',
                         isSelected: _currentSection == 'Set Coordinates',
@@ -443,15 +1227,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
                       ),
                       _buildMenuItem(
                         icon: Icons.search_outlined,
-                        title: 'Search',
-                        isSelected: _currentSection == 'Search',
-                        onTap: () => _setCurrentSection('Search'),
-                      ),
-                      _buildMenuItem(
-                        icon: Icons.people_outline,
-                        title: 'Active Users',
-                        isSelected: _currentSection == 'Active Users',
-                        onTap: () => _setCurrentSection('Active Users'),
+                        title: 'Onduty',
+                        isSelected: _currentSection == 'Onduty',
+                        onTap: () => _setCurrentSection('Onduty'),
                       ),
                       _buildMenuItem(
                         icon: Icons.bar_chart_outlined,
@@ -543,8 +1321,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
             ),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
-              color:
-                  isSelected ? const Color(0xFF4CAF50).withOpacity(0.1) : null,
+              color: isSelected ? const Color(0xFF4CAF50).withOpacity(0.1) : null,
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -552,10 +1329,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
                 Icon(
                   icon,
                   size: 20,
-                  color:
-                      isLogout
-                          ? Colors.red
-                          : isSelected
+                  color: isLogout
+                      ? Colors.red
+                      : isSelected
                           ? const Color(0xFF4CAF50)
                           : Colors.grey.shade700,
                 ),
@@ -565,12 +1341,10 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
                     title,
                     style: TextStyle(
                       fontSize: 14,
-                      fontWeight:
-                          isSelected ? FontWeight.w600 : FontWeight.normal,
-                      color:
-                          isLogout
-                              ? Colors.red
-                              : isSelected
+                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                      color: isLogout
+                          ? Colors.red
+                          : isSelected
                               ? const Color(0xFF4CAF50)
                               : Colors.grey.shade700,
                     ),
@@ -626,27 +1400,23 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
                 shape: BoxShape.circle,
                 border: Border.all(color: const Color(0xFF4CAF50), width: 3),
               ),
-              child:
-                  _isLoading
-                      ? const CircularProgressIndicator()
-                      : _profileImageUrl != null
+              child: _isLoading
+                  ? const CircularProgressIndicator()
+                  : _profileImageUrl != null
                       ? CachedNetworkImage(
-                        imageUrl: _profileImageUrl!,
-                        imageBuilder:
-                            (context, imageProvider) => Container(
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                image: DecorationImage(
-                                  image: imageProvider,
-                                  fit: BoxFit.cover,
-                                ),
+                          imageUrl: _profileImageUrl!,
+                          imageBuilder: (context, imageProvider) => Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              image: DecorationImage(
+                                image: imageProvider,
+                                fit: BoxFit.cover,
                               ),
                             ),
-                        placeholder:
-                            (context, url) => const CircularProgressIndicator(),
-                        errorWidget:
-                            (context, url, error) => _buildDefaultAvatar(),
-                      )
+                          ),
+                          placeholder: (context, url) => const CircularProgressIndicator(),
+                          errorWidget: (context, url, error) => _buildDefaultAvatar(),
+                        )
                       : _buildDefaultAvatar(),
             ),
           ),
@@ -669,7 +1439,6 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
     );
   }
 }
-
 class ProfileDialog extends StatefulWidget {
   final String? currentImageUrl;
   final String currentCollegeName;
